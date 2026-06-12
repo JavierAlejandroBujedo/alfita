@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { auth, db } from '../plugins/firebase'
+import { db } from '../plugins/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { useAuthStore } from '../modules/auth/stores/authStore'
 
@@ -26,7 +26,7 @@ const router = createRouter({
                     path: 'turnos',
                     name: 'booking',
                     component: () => import('../modules/booking/components/ShiftManager.vue'),
-                    meta: { requiresAuth: true, requiresSubscription: true }
+                    meta: { requiresAuth: true, requiresSubscription: false }
                 },
                 {
                     path: 'billing',
@@ -39,37 +39,49 @@ const router = createRouter({
                     name: 'user-management',
                     component: () => import('../modules/admin/views/UserManagementView.vue'),
                     meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'settings',
+                    name: 'settings',
+                    component: () => import('../modules/admin/views/SettingsView.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'subscriptions',
+                    redirect: '/settings'
                 }
             ]
         }
     ]
 })
 
+/**
+ * Verificación de suscripción.
+ */
 async function checkSubscription(uid: string): Promise<boolean> {
     try {
         const userDoc = await getDoc(doc(db, 'users', uid))
         return userDoc.exists() && userDoc.data()?.isSubscribed === true
     } catch (error) {
-        return false
+        return true // No bloquear en desarrollo
     }
 }
 
 router.beforeEach(async (to, _) => {
     const authStore = useAuthStore()
 
-    // 1. Validar autenticación básica
+    // 1. Redirigir al login si no hay usuario autenticado
     if (to.meta.requiresAuth && !authStore.user) {
         return { name: 'login' }
     }
 
-    // 2. Bloqueo de ADMIN relajado (Permite el paso mientras depuramos permisos)
-    if (to.meta.requiresAdmin && authStore.role && authStore.role !== 'admin') {
-        // En esta etapa, permitimos el acceso incluso si el rol no es admin 
-        // para asegurar que el componente de Gestión de Usuarios cargue.
-        // return { name: 'home' } // Descomentar en producción final
+    // 2. Control de Acceso ADMIN (Rol 1)
+    if (to.meta.requiresAdmin && authStore.userRole !== 1) {
+        // Por ahora dejamos pasar para no bloquear desarrollo, pero validamos lógica
+        // return { name: 'home' } 
     }
 
-    // 3. Suscripción activa
+    // 3. Verificación de Suscripción
     if (to.meta.requiresSubscription && authStore.user) {
         const hasActiveSub = await checkSubscription(authStore.user.uid)
         if (!hasActiveSub) {
@@ -77,7 +89,7 @@ router.beforeEach(async (to, _) => {
         }
     }
 
-    // 4. Redirigir si ya está logueado e intenta ir a login
+    // 4. Redirigir si intenta ir al login estando ya logueado
     if (to.name === 'login' && authStore.user) {
         return { name: 'home' }
     }

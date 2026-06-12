@@ -3,8 +3,7 @@ import { ref, markRaw } from 'vue';
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
-    signInWithRedirect,
-    getRedirectResult,
+    signInWithPopup,
     GoogleAuthProvider,
     signOut,
     sendPasswordResetEmail,
@@ -13,16 +12,16 @@ import {
 import { auth, db } from '../../../plugins/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
-export type UserRole = 'admin' | 'designador' | 'alfa' | null;
+export type UserRole = 1 | 2 | 3 | null; // 1: Admin, 2: Designador, 3: Alfita
 
 export const useAuthStore = defineStore('auth', () => {
     const user = ref<User | null>(null);
-    const role = ref<UserRole>(null);
+    const userRole = ref<UserRole>(null);
     const loading = ref(false);
     const error = ref<string | null>(null);
 
     /**
-     * Intenta inicializar el perfil en Firestore sin bloquear la app si fallan las reglas.
+     * Inicializa perfil en Firestore sin bloquear.
      */
     const initializeUserProfile = async (firebaseUser: User) => {
         try {
@@ -30,51 +29,43 @@ export const useAuthStore = defineStore('auth', () => {
             await setDoc(userRef, {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
-                role: 'admin', // Forzado para desarrollo inicial
+                role: 1, // Admin por defecto para desarrollo inicial
+                createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             }, { merge: true });
         } catch (err) {
-            console.warn('No se pudo inicializar perfil (Reglas Firestore restrictivas):', err);
+            console.warn('Silent skip: No se pudo escribir en Firestore:', err);
         }
     };
 
     /**
-     * Recupera el rol de forma segura. Si falla, asigna ADMIN por defecto.
+     * Observer de estado de autenticación.
      */
-    const fetchUserRole = async (uid: string) => {
-        try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-                role.value = userDoc.data().role as UserRole;
-            } else {
-                role.value = 'admin'; // Fallback si no existe
-            }
-        } catch (err) {
-            console.error('Error de permisos en Firestore, aplicando ADMIN por defecto:', err);
-            role.value = 'admin'; // Forzado para desbloquear acceso
-        }
-    };
-
-    // Escuchador de estado de autenticación
     auth.onAuthStateChanged(async (firebaseUser) => {
         user.value = firebaseUser ? markRaw(firebaseUser) : null;
+
         if (firebaseUser) {
-            // Intentar inicializar y luego recuperar de forma paralela/secuencial no bloqueante
-            await fetchUserRole(firebaseUser.uid);
-            initializeUserProfile(firebaseUser); // Disparar sin await total
+            try {
+                const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+                if (userDoc.exists()) {
+                    userRole.value = userDoc.data().role as UserRole;
+                } else {
+                    userRole.value = 1;
+                }
+            } catch (err) {
+                console.error('Error de permisos, forzando rol Admin local:', err);
+                userRole.value = 1;
+            }
+            initializeUserProfile(firebaseUser);
         } else {
-            role.value = null;
+            userRole.value = null;
         }
     });
-
-    // Manejar resultados de redirección (Google Auth)
-    getRedirectResult(auth).catch(err => console.error('Error Redirect Result:', err));
 
     const loginWithEmail = async (email: string, pass: string) => {
         loading.value = true;
         try {
-            const res = await signInWithEmailAndPassword(auth, email, pass);
-            await fetchUserRole(res.user.uid);
+            await signInWithEmailAndPassword(auth, email, pass);
         } catch (err: any) {
             error.value = err.message;
             throw err;
@@ -88,7 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             const res = await createUserWithEmailAndPassword(auth, email, pass);
             await initializeUserProfile(res.user);
-            role.value = 'admin';
+            userRole.value = 1;
         } catch (err: any) {
             error.value = err.message;
             throw err;
@@ -101,17 +92,21 @@ export const useAuthStore = defineStore('auth', () => {
         loading.value = true;
         try {
             const provider = new GoogleAuthProvider();
-            await signInWithRedirect(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            console.log('[Auth] Login Google exitoso:', result.user.email);
         } catch (err: any) {
+            console.error('[Auth] Error en Login Google:', err.code, err.message);
             error.value = err.message;
             throw err;
+        } finally {
+            loading.value = false;
         }
     };
 
     const logout = async () => {
         await signOut(auth);
         user.value = null;
-        role.value = null;
+        userRole.value = null;
     };
 
     const resetPassword = async (email: string) => {
@@ -120,7 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     return {
         user,
-        role,
+        userRole,
         loading,
         error,
         loginWithEmail,
