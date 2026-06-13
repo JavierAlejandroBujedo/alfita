@@ -18,37 +18,76 @@ const router = createRouter({
             children: [
                 {
                     path: '',
+                    redirect: '/inicio'
+                },
+                {
+                    path: 'inicio',
                     name: 'home',
                     component: () => import('../views/HomeView.vue'),
                     meta: { requiresAuth: true }
                 },
                 {
-                    path: 'turnos',
+                    path: 'mis-turnos',
                     name: 'booking',
                     component: () => import('../modules/booking/components/ShiftManager.vue'),
                     meta: { requiresAuth: true, requiresSubscription: false }
                 },
                 {
-                    path: 'billing',
-                    name: 'billing',
+                    path: 'mi-perfil',
+                    name: 'profile',
+                    component: () => import('../views/HomeView.vue'), // placeholder, el perfil es modal
+                    meta: { requiresAuth: true }
+                },
+                {
+                    path: 'suscripcion',
+                    name: 'subscription',
                     component: () => import('../modules/billing/views/BillingView.vue'),
                     meta: { requiresAuth: true }
                 },
                 {
-                    path: 'usuarios',
-                    name: 'user-management',
-                    component: () => import('../modules/admin/views/UserManagementView.vue'),
-                    meta: { requiresAuth: true, requiresAdmin: true }
-                },
-                {
-                    path: 'settings',
+                    path: 'configuracion',
                     name: 'settings',
                     component: () => import('../modules/admin/views/SettingsView.vue'),
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
+                    path: 'configuracion/facturacion',
+                    name: 'billing',
+                    component: () => import('../modules/billing/views/BillingView.vue'),
+                    meta: { requiresAuth: true }
+                },
+                {
+                    path: 'configuracion/usuarios',
+                    name: 'user-management',
+                    component: () => import('../modules/admin/views/UserManagementView.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'configuracion/estadisticas',
+                    name: 'estadisticas',
+                    component: () => import('../modules/admin/views/SettingsView.vue'), // placeholder
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                // Redirecciones legacy
+                {
+                    path: 'turnos',
+                    redirect: '/mis-turnos'
+                },
+                {
+                    path: 'billing',
+                    redirect: '/configuracion/facturacion'
+                },
+                {
+                    path: 'usuarios',
+                    redirect: '/configuracion/usuarios'
+                },
+                {
+                    path: 'settings',
+                    redirect: '/configuracion'
+                },
+                {
                     path: 'subscriptions',
-                    redirect: '/settings'
+                    redirect: '/suscripcion'
                 }
             ]
         }

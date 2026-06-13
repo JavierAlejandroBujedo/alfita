@@ -10,8 +10,9 @@
       class="bg-background pa-4"
       width="280"
     >
-      <div class="d-flex align-center mb-10 mt-2 px-2">
-        <v-icon color="primary" size="32" class="mr-3" style="transform: rotate(180deg)">mdi-vuetify</v-icon>
+      <!-- Logo centrado sobre ALFITA -->
+      <div class="d-flex flex-column align-center mb-8 mt-2 px-2">
+        <v-icon color="primary" size="36" style="transform: rotate(180deg)" class="mb-1">mdi-vuetify</v-icon>
         <h1 class="text-h5 font-weight-black text-primary ls-tight">ALFITA</h1>
       </div>
 
@@ -20,7 +21,7 @@
         <v-list-item
           prepend-icon="mdi-home-outline"
           title="Inicio"
-          to="/"
+          to="/inicio"
           color="primary"
           rounded="pill"
           class="mb-2"
@@ -30,55 +31,66 @@
         <v-list-item
           prepend-icon="mdi-calendar-check-outline"
           title="Mis Turnos"
-          to="/turnos"
+          to="/mis-turnos"
           color="primary"
           rounded="pill"
           class="mb-2"
         />
 
-        <!-- 3. Mi Perfil (Global Modal) -->
+        <!-- 3. Mi Perfil (abre modal + URL /mi-perfil) -->
         <v-list-item
           prepend-icon="mdi-account-circle-outline"
           title="Mi Perfil"
-          @click="profileModalShow = true"
+          color="primary"
+          rounded="pill"
+          class="mb-2"
+          :active="route.path === '/mi-perfil'"
+          @click="openProfile"
+        />
+
+        <!-- 4. Suscripción -->
+        <v-list-item
+          prepend-icon="mdi-star-circle-outline"
+          title="Suscripción"
+          to="/suscripcion"
           color="primary"
           rounded="pill"
           class="mb-2"
         />
 
-        <!-- 4. CONFIGURACIÓN (ADMIN SOLAMENTE) -->
+        <!-- 5. CONFIGURACIÓN (ADMIN SOLAMENTE) -->
         <v-list-group v-if="authStore.userRole === 1" value="Settings">
           <template v-slot:activator="{ props }">
             <v-list-item
               v-bind="props"
               prepend-icon="mdi-cog-outline"
               title="Configuración"
-              to="/settings"
+              to="/configuracion"
               rounded="pill"
-              class="mb-2"
+              class="mb-2 text-black font-weight-bold"
             ></v-list-item>
           </template>
 
           <v-list-item
             prepend-icon="mdi-credit-card-outline"
             title="Facturación"
-            to="/billing"
+            to="/configuracion/facturacion"
             rounded="pill"
             class="mb-1 ml-4"
           />
 
           <v-list-item
             prepend-icon="mdi-account-multiple-outline"
-            title="Usuarios"
-            to="/usuarios"
+            title="Control de Usuarios"
+            to="/configuracion/usuarios"
             rounded="pill"
-            class="mb-1 ml-4"
+            class="mb-1 ml-4 text-black"
           />
 
           <v-list-item
-            prepend-icon="mdi-star-settings-outline"
-            title="Planes"
-            to="/settings"
+            prepend-icon="mdi-chart-bar"
+            title="Estadísticas"
+            to="/configuracion/estadisticas"
             rounded="pill"
             class="mb-1 ml-4"
           />
@@ -86,8 +98,8 @@
       </v-list>
 
       <template v-slot:append>
-        <div class="px-2 pb-4">
-          <v-divider class="mb-6 mx-2"></v-divider>
+        <div class="px-2 pb-8">
+          <v-divider class="mb-4 mx-2"></v-divider>
           <v-btn
             block
             variant="text"
@@ -120,7 +132,7 @@
     <!-- Modal de Perfil Global -->
     <ProfileModal 
       :show="profileModalShow" 
-      @close="profileModalShow = false" 
+      @close="closeProfile" 
       @updated="onProfileUpdated"
     />
 
@@ -149,14 +161,35 @@ const route = useRoute()
 const profileModalShow = ref(false)
 const snackbar = reactive({ show: false, text: '', color: 'success' })
 
+const openProfile = () => {
+  router.push('/mi-perfil')
+  profileModalShow.value = true
+}
+
+const closeProfile = () => {
+  profileModalShow.value = false
+  if (route.path === '/mi-perfil') {
+    router.push('/inicio')
+  }
+}
+
+// Si el usuario navega directamente a /mi-perfil, abrir el modal automáticamente
+watch(() => route.path, (path) => {
+  if (path === '/mi-perfil') {
+    profileModalShow.value = true
+  }
+}, { immediate: true })
+
 const currentRouteTitle = computed(() => {
   switch (route.name) {
     case 'home': return 'Panel de Inicio'
     case 'profile': return 'Mi Perfil'
+    case 'subscription': return 'Suscripción'
     case 'booking': return 'Mis Turnos'
     case 'billing': return 'Facturación'
     case 'user-management': return 'Control de Usuarios'
-    case 'settings': return 'Configuración de Planes'
+    case 'settings': return 'Configuración'
+    case 'estadisticas': return 'Estadísticas'
     default: return 'ALFITA'
   }
 })
