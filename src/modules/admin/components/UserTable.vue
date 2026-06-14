@@ -20,8 +20,8 @@
         <tr v-for="user in users" :key="user.uid">
           <td class="py-4 px-6">
             <div class="d-flex align-center">
-              <v-avatar color="primary" variant="tonal" size="40" class="mr-4">
-                <v-icon size="20">mdi-account-outline</v-icon>
+              <v-avatar :color="getRoleColor(user.role)" variant="tonal" size="40" class="mr-4">
+                <v-icon size="20">{{ getRoleIcon(user.role) }}</v-icon>
               </v-avatar>
               <div>
                 <div class="text-body-1 font-weight-medium text-grey-darken-4">{{ user.email }}</div>
@@ -110,25 +110,38 @@ defineEmits(['edit', 'updateRole', 'delete'])
 
 const roleOptions = [
   { label: 'Admin', value: 1 },
-  { label: 'Designador', value: 2 },
-  { label: 'Alfita', value: 3 }
+  { label: 'Alfita', value: 2 },
+  { label: 'Designador', value: 3 },
+  { label: 'Asignado', value: 4 }
 ]
 
 const getRoleLabel = (role: number) => {
   switch (role) {
     case 1: return 'Admin'
-    case 2: return 'Designador'
-    case 3: return 'Alfita'
+    case 2: return 'Alfita'
+    case 3: return 'Designador'
+    case 4: return 'Asignado'
     default: return 'Usuario'
   }
 }
 
 const getRoleColor = (role: number) => {
   switch (role) {
-    case 1: return '#1a73e8'
-    case 2: return '#1e8e3e'
-    case 3: return '#757575'
-    default: return '#757575'
+    case 1: return 'deep-purple-lighten-5'
+    case 2: return 'blue-lighten-5'
+    case 3: return 'amber-lighten-4'
+    case 4: return 'green-lighten-5'
+    default: return 'grey-lighten-4'
+  }
+}
+
+const getRoleIcon = (role: number) => {
+  switch (role) {
+    case 1: return 'mdi-shield-crown'
+    case 2: return 'mdi-account-heart-outline'
+    case 3: return 'mdi-account-star'
+    case 4: return 'mdi-account-tie'
+    default: return 'mdi-account'
   }
 }
 

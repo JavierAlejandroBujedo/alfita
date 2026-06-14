@@ -68,6 +68,12 @@ const router = createRouter({
                     component: () => import('../modules/admin/views/SettingsView.vue'), // placeholder
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
+                {
+                    path: 'configuracion/detalles',
+                    name: 'roles-detail',
+                    component: () => import('../modules/admin/views/RolesDetailView.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
                 // Redirecciones legacy
                 {
                     path: 'turnos',

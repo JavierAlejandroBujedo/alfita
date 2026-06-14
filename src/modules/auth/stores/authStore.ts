@@ -12,11 +12,12 @@ import {
 import { auth, db } from '../../../plugins/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
-export type UserRole = 1 | 2 | 3 | null; // 1: Admin, 2: Designador, 3: Alfita
+export type UserRole = 1 | 2 | 3 | 4 | null; // 1: Admin, 2: Alfita, 3: Designador, 4: Asignado
 
 export const useAuthStore = defineStore('auth', () => {
     const user = ref<User | null>(null);
     const userRole = ref<UserRole>(null);
+    const userData = ref<any>(null);
     const loading = ref(false);
     const error = ref<string | null>(null);
 
@@ -48,6 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
             try {
                 const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
                 if (userDoc.exists()) {
+                    userData.value = userDoc.data();
                     userRole.value = userDoc.data().role as UserRole;
                 } else {
                     userRole.value = 1;
@@ -59,6 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
             initializeUserProfile(firebaseUser);
         } else {
             userRole.value = null;
+            userData.value = null;
         }
     });
 
@@ -116,6 +119,7 @@ export const useAuthStore = defineStore('auth', () => {
     return {
         user,
         userRole,
+        userData,
         loading,
         error,
         loginWithEmail,

@@ -8,8 +8,8 @@
     <v-card rounded="xl" class="pa-2 bg-grey-lighten-5 overflow-hidden">
       <!-- HEADER -->
       <v-card-title class="d-flex align-center pb-2 pt-2 px-4">
-        <v-avatar color="primary" variant="tonal" size="40" class="mr-3">
-          <v-icon size="20">mdi-account-circle-outline</v-icon>
+        <v-avatar :color="getRoleColor(authStore.userRole)" variant="tonal" size="40" class="mr-3">
+          <v-icon size="20">{{ getRoleIcon(authStore.userRole) }}</v-icon>
         </v-avatar>
         <div class="text-h6 font-weight-bold">Mi Perfil</div>
         <v-spacer />
@@ -54,12 +54,12 @@
                     density="compact"
                     rounded="lg"
                     placeholder="Tu rango institucional"
-                    :disabled="!profile.reparticion"
+                    :disabled="loadingJer"
                     :loading="loadingJer"
                     no-data-text="Sin jerarquías disponibles para esta repartición"
                     hide-details
                   />
-                  <div v-if="profile.reparticion && !loadingJer" class="text-caption text-grey ml-1 mt-1">
+                  <div v-if="!loadingJer" class="text-caption text-grey ml-1 mt-1">
                     {{ filteredJerarquias.length }} rango{{ filteredJerarquias.length !== 1 ? 's' : '' }} disponible{{ filteredJerarquias.length !== 1 ? 's' : '' }}
                   </div>
                 </div>
@@ -199,20 +199,12 @@ const jerarquias    = ref<JerarquiaDoc[]>([])
 let unsubRep: any = null
 let unsubJer: any = null
 
-// Ordena por campo 'orden' numérico, con fallback alfabético por 'nombre'
-const sortJerarquias = (list: JerarquiaDoc[]) =>
-  [...list].sort((a, b) => {
-    const aO = typeof a.orden === 'number' ? a.orden : 9999
-    const bO = typeof b.orden === 'number' ? b.orden : 9999
-    if (aO !== bO) return aO - bO
-    return (a.nombre || '').localeCompare(b.nombre || '', 'es')
-  })
-
 // Jerarquías visibles según configuración de la repartición seleccionada
 const filteredJerarquias = computed(() => {
-  if (!profile.value.reparticion) return []
+  // Sin repartición → mostrar todas las jerarquías disponibles
+  if (!profile.value.reparticion) return jerarquias.value
   const rep = reparticiones.value.find(r => r.id === profile.value.reparticion)
-  // Reparticiones aún cargando → mostrar todas para no bloquear al usuario
+  // Repartición aún cargando → mostrar todas para no bloquear al usuario
   if (!rep) return jerarquias.value
   // Sin restricción de jerarquía → TODAS las de la colección
   if (!rep.vinculaJerarquia) return jerarquias.value
@@ -233,12 +225,12 @@ const formatDNI = (e: any) => {
 }
 
 onMounted(() => {
-  // ── Reparticiones: sin orderBy → cliente ordena por nombre ──────────────
+  // ── Reparticiones ────────────────────────────────────────────────────────
   unsubRep = onSnapshot(
     collection(db, 'reparticiones'),
     (snap) => {
       reparticiones.value = snap.docs
-        .map(d => ({ id: d.id, ...(d.data() as Omit<ReparticionDoc, 'id'>) }))
+        .map(d => ({ id: d.id, ...(d.data() as any) }))
         .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'))
       loadingLists.value = false
     },
@@ -248,14 +240,22 @@ onMounted(() => {
     }
   )
 
-  // ── Jerarquías: sin orderBy en Firestore → evita requerir índice ────────
-  // Ordenación completa en cliente (por 'orden', luego por 'nombre')
+  // ── Jerarquías (Carga con Ordenamiento en Cliente) ──────────────────────
   unsubJer = onSnapshot(
     collection(db, 'jerarquias'),
     (snap) => {
-      jerarquias.value = sortJerarquias(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<JerarquiaDoc, 'id'>) })))
+      // Obtenemos los datos raw
+      const rawDocs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+      
+      // Ordenamos en cliente: primero por 'orden' (numérico), luego por 'nombre'
+      jerarquias.value = rawDocs.sort((a, b) => {
+        const ordenA = typeof a.orden === 'number' ? a.orden : 9999
+        const ordenB = typeof b.orden === 'number' ? b.orden : 9999
+        if (ordenA !== ordenB) return ordenA - ordenB
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es')
+      })
+      
       loadingJer.value = false
-      console.log('[Mi Perfil] Jerarquías cargadas:', jerarquias.value.length)
     },
     (err) => {
       console.error('[Mi Perfil] Error cargando jerarquías:', err)
@@ -265,8 +265,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unsubRep && unsubRep()
-  unsubJer && unsubJer()
+  if (unsubRep) unsubRep()
+  if (unsubJer) unsubJer()
 })
 
 // Carga el perfil del usuario cada vez que se abre el modal
@@ -287,6 +287,26 @@ watch(() => props.show, async (isVisible) => {
     }
   }
 })
+
+const getRoleColor = (role: any) => {
+  switch (role) {
+    case 1: return 'deep-purple-lighten-5'
+    case 2: return 'blue-lighten-5'
+    case 3: return 'amber-lighten-4'
+    case 4: return 'green-lighten-5'
+    default: return 'primary'
+  }
+}
+
+const getRoleIcon = (role: any) => {
+  switch (role) {
+    case 1: return 'mdi-shield-crown'
+    case 2: return 'mdi-account-heart-outline'
+    case 3: return 'mdi-account-star'
+    case 4: return 'mdi-account-tie'
+    default: return 'mdi-account-circle-outline'
+  }
+}
 
 const save = async () => {
   if (!authStore.user) return

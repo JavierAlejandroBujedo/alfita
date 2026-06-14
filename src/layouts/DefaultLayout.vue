@@ -3,20 +3,20 @@
     <!-- Menú Lateral Estilo Google -->
     <v-navigation-drawer
       v-model="drawer"
-      :permanent="!isMobile"
-      :temporary="isMobile"
+      temporary
       border="0"
-      elevation="0"
-      class="bg-background pa-4"
+      elevation="2"
+      :color="sidebarColor"
+      class="pa-4 border-none"
       width="280"
     >
       <!-- Logo centrado sobre ALFITA -->
       <div class="d-flex flex-column align-center mb-8 mt-2 px-2">
         <v-icon color="primary" size="36" style="transform: rotate(180deg)" class="mb-1">mdi-vuetify</v-icon>
-        <h1 class="text-h5 font-weight-black text-primary ls-tight">ALFITA</h1>
+        <h1 class="text-h5 font-weight-black ls-tight" :class="isSidebarDark ? 'text-white' : 'text-primary'">ALFITA</h1>
       </div>
 
-      <v-list density="compact" nav class="bg-transparent px-2">
+      <v-list density="compact" nav class="bg-transparent px-2" :theme="isSidebarDark ? 'dark' : 'light'">
         <!-- 1. Inicio -->
         <v-list-item
           prepend-icon="mdi-home-outline"
@@ -44,7 +44,7 @@
           color="primary"
           rounded="pill"
           class="mb-2"
-          :active="route.path === '/mi-perfil'"
+          :active="profileModalShow"
           @click="openProfile"
         />
 
@@ -67,7 +67,7 @@
               title="Configuración"
               to="/configuracion"
               rounded="pill"
-              class="mb-2 text-black font-weight-bold"
+              class="mb-2 font-weight-bold"
             ></v-list-item>
           </template>
 
@@ -84,7 +84,7 @@
             title="Control de Usuarios"
             to="/configuracion/usuarios"
             rounded="pill"
-            class="mb-1 ml-4 text-black"
+            class="mb-1 ml-4"
           />
 
           <v-list-item
@@ -94,30 +94,36 @@
             rounded="pill"
             class="mb-1 ml-4"
           />
+
+          <v-list-item
+            prepend-icon="mdi-information-outline"
+            title="Detalles"
+            to="/configuracion/detalles"
+            rounded="pill"
+            class="mb-1 ml-4"
+          />
         </v-list-group>
       </v-list>
 
-      <template v-slot:append>
-        <div class="px-2 pb-8">
-          <v-divider class="mb-4 mx-2"></v-divider>
-          <v-btn
-            block
-            variant="text"
-            color="error"
-            rounded="pill"
-            prepend-icon="mdi-logout"
-            class="text-none justify-start px-4 font-weight-medium"
-            @click="handleLogout"
-          >
-            Cerrar Sesión
-          </v-btn>
-        </div>
-      </template>
+      <div class="px-4 pb-8">
+        <v-divider class="mt-6 mb-4 mx-2" :color="isSidebarDark ? 'white' : 'primary'"></v-divider>
+        <v-btn
+          block
+          variant="text"
+          :color="isSidebarDark ? 'white' : 'primary'"
+          rounded="pill"
+          prepend-icon="mdi-logout"
+          class="text-none justify-start px-4 font-weight-medium"
+          @click="handleLogout"
+        >
+          Cerrar Sesión
+        </v-btn>
+      </div>
     </v-navigation-drawer>
 
-    <!-- App Bar para Móviles -->
-    <v-app-bar v-if="isMobile" flat class="bg-background border-b px-2">
-      <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
+    <!-- App Bar Global -->
+    <v-app-bar flat class="bg-background border-b px-2">
+      <v-app-bar-nav-icon color="primary" @click="drawer = !drawer"></v-app-bar-nav-icon>
       <v-app-bar-title class="font-weight-bold text-grey-darken-3">
         {{ currentRouteTitle }}
       </v-app-bar-title>
@@ -154,35 +160,48 @@ import ProfileModal from '../components/ProfileModal.vue'
 
 const { mobile: isMobile } = useDisplay()
 const authStore = useAuthStore()
-const drawer = ref(!isMobile.value)
+const drawer = ref(false)
 const router = useRouter()
 const route = useRoute()
+
+// Color dinámico según el Rol
+const sidebarColor = computed(() => {
+  switch (authStore.userRole) {
+    case 1: return 'deep-purple-lighten-5' // Admin (Púrpura suave)
+    case 2: return 'blue-lighten-5'        // Alfita (Celeste suave)
+    case 3: return 'amber-lighten-4'       // Designador (Naranja suave)
+    case 4: return 'green-lighten-5'       // Asignado (Verde suave)
+    default: return 'grey-lighten-4'
+  }
+})
+
+// Determina si el texto debe ser blanco o negro por contraste
+const isSidebarDark = computed(() => {
+  // Ahora todos los fondos son claros para una estética suave
+  return false
+})
 
 const profileModalShow = ref(false)
 const snackbar = reactive({ show: false, text: '', color: 'success' })
 
 const openProfile = () => {
-  router.push('/mi-perfil')
   profileModalShow.value = true
 }
 
 const closeProfile = () => {
   profileModalShow.value = false
-  if (route.path === '/mi-perfil') {
-    router.push('/inicio')
-  }
 }
-
-// Si el usuario navega directamente a /mi-perfil, abrir el modal automáticamente
-watch(() => route.path, (path) => {
-  if (path === '/mi-perfil') {
-    profileModalShow.value = true
-  }
-}, { immediate: true })
 
 const currentRouteTitle = computed(() => {
   switch (route.name) {
-    case 'home': return 'Panel de Inicio'
+    case 'home': {
+      const name = authStore.userData?.displayName
+      if (name && name.trim()) {
+        const firstWord = name.trim().split(' ')[0]
+        return `¡Hola ${firstWord}!`
+      }
+      return 'Panel de Inicio'
+    } 
     case 'profile': return 'Mi Perfil'
     case 'subscription': return 'Suscripción'
     case 'booking': return 'Mis Turnos'
@@ -190,6 +209,7 @@ const currentRouteTitle = computed(() => {
     case 'user-management': return 'Control de Usuarios'
     case 'settings': return 'Configuración'
     case 'estadisticas': return 'Estadísticas'
+    case 'roles-detail': return 'Detalles del Sistema'
     default: return 'ALFITA'
   }
 })

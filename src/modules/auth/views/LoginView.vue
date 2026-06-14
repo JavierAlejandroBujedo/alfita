@@ -179,15 +179,34 @@ const resetStates = () => {
   password.value = ''
 }
 
+const firebaseErrorMsg = (code: string): string => {
+  const map: Record<string, string> = {
+    'auth/invalid-credential':       'Correo o contraseña incorrectos.',
+    'auth/user-not-found':           'No existe una cuenta con ese correo.',
+    'auth/wrong-password':           'Contraseña incorrecta.',
+    'auth/invalid-email':            'El formato del correo no es válido.',
+    'auth/too-many-requests':        'Demasiados intentos. Intentá más tarde.',
+    'auth/email-already-in-use':     'Ese correo ya está registrado.',
+    'auth/weak-password':            'La contraseña debe tener al menos 6 caracteres.',
+    'auth/network-request-failed':   'Sin conexión. Verificá tu red.',
+    'auth/popup-closed-by-user':     'Cerraste la ventana de Google antes de completar.',
+    'auth/cancelled-popup-request':  '',   // silencioso
+  }
+  return map[code] || 'Ocurrió un error inesperado. Intentá de nuevo.'
+}
+
 const handleLogin = async () => {
   loading.value = true
   try {
     await signInWithEmailAndPassword(auth, email.value, password.value)
     router.replace('/')
-  } catch (err) {
-    snackbar.text = 'Error al iniciar sesión'
-    snackbar.color = 'error'
-    snackbar.show = true
+  } catch (err: any) {
+    const msg = firebaseErrorMsg(err?.code || '')
+    if (msg) {
+      snackbar.text  = msg
+      snackbar.color = 'error'
+      snackbar.show  = true
+    }
   } finally { loading.value = false }
 }
 
@@ -201,12 +220,19 @@ const handleGoogleLogin = async () => {
       await setDoc(userRef, {
         displayName: user.displayName,
         email: user.email,
-        role: 3, // Alfita por defecto
+        role: 2,
         createdAt: new Date()
       })
     }
     router.replace('/')
-  } catch (err) { /* silent */ }
+  } catch (err: any) {
+    const msg = firebaseErrorMsg(err?.code || '')
+    if (msg) {
+      snackbar.text  = msg
+      snackbar.color = 'error'
+      snackbar.show  = true
+    }
+  }
 }
 
 const handleRegister = async () => {
@@ -216,14 +242,17 @@ const handleRegister = async () => {
     await setDoc(doc(db, 'users', cred.user.uid), {
       displayName: registerName.value,
       email: registerEmail.value,
-      role: 3,
+      role: 2,
       createdAt: new Date()
     })
     router.replace('/')
-  } catch (err) {
-    snackbar.text = 'Error al registrarse'
-    snackbar.color = 'error'
-    snackbar.show = true
+  } catch (err: any) {
+    const msg = firebaseErrorMsg(err?.code || '')
+    if (msg) {
+      snackbar.text  = msg
+      snackbar.color = 'error'
+      snackbar.show  = true
+    }
   } finally { loading.value = false }
 }
 </script>

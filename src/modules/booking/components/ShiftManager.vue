@@ -1,7 +1,6 @@
 <template>
   <div class="shift-manager">
     <div class="d-flex align-center mb-6">
-      <h1 class="text-h4 font-weight-bold grey-darken-3">Mis Turnos</h1>
       <v-spacer />
       <v-btn color="primary" prepend-icon="mdi-plus">
         Nuevo Turno
