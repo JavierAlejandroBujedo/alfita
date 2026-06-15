@@ -2,9 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// "OJOS" PARA TERMINAL/CONSOLA: Verificación de carga de variables
 const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-console.log('[Firebase Init] API Key cargada:', rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'FALTANTE');
 
 const firebaseConfig = {
     apiKey: rawApiKey,
@@ -26,4 +24,4 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
-console.log('[Firebase Init] App inicializada correctamente con projectId:', firebaseConfig.projectId);
+// Firebase inicializado correctamente

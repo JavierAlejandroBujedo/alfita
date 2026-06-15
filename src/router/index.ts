@@ -54,7 +54,7 @@ const router = createRouter({
                     path: 'configuracion/facturacion',
                     name: 'billing',
                     component: () => import('../modules/billing/views/BillingView.vue'),
-                    meta: { requiresAuth: true }
+                    meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
                     path: 'configuracion/usuarios',
@@ -96,6 +96,12 @@ const router = createRouter({
                     redirect: '/suscripcion'
                 }
             ]
+        },
+        {
+            path: '/hoja-de-servicio/:id',
+            name: 'shared-sheet',
+            component: () => import('../views/SharedServiceSheetView.vue'),
+            meta: { requiresAuth: true }
         }
     ]
 })
@@ -122,8 +128,7 @@ router.beforeEach(async (to, _) => {
 
     // 2. Control de Acceso ADMIN (Rol 1)
     if (to.meta.requiresAdmin && authStore.userRole !== 1) {
-        // Por ahora dejamos pasar para no bloquear desarrollo, pero validamos lógica
-        // return { name: 'home' } 
+        return { name: 'home' }
     }
 
     // 3. Verificación de Suscripción

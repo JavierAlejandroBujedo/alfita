@@ -222,7 +222,8 @@ const form = reactive({
   dni: '',
   telefonoPersona: '',
   email: '',
-  lugarRevista: ''
+  lugarRevista: '',
+  assignments: {}
 })
 
 const isFormIncomplete = computed(() => {
@@ -256,6 +257,19 @@ watch(() => props.show, (isVisible) => {
       form.telefonoPersona = authStore.userData.phone || ''
       form.email = authStore.userData.email || ''
       form.lugarRevista = ''
+      form.assignments = {}
+    }
+  }
+})
+
+// Reset assignments if month/year changes during edit
+watch([() => form.month, () => form.year], ([newMonth, newYear]) => {
+  if (props.show && props.editData) {
+    if (newMonth !== props.editData.month || newYear !== props.editData.year) {
+      form.assignments = {}
+    } else {
+      // Restore if changed back
+      form.assignments = props.editData.assignments || {}
     }
   }
 })

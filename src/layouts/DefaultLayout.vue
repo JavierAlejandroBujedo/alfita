@@ -16,7 +16,13 @@
         <h1 class="text-h5 font-weight-black ls-tight" :class="isSidebarDark ? 'text-white' : 'text-primary'">ALFITA</h1>
       </div>
 
-      <v-list density="compact" nav class="bg-transparent px-2" :theme="isSidebarDark ? 'dark' : 'light'">
+      <v-list 
+        v-model:opened="openedGroups"
+        density="compact" 
+        nav 
+        class="bg-transparent px-2" 
+        :theme="isSidebarDark ? 'dark' : 'light'"
+      >
         <!-- 1. Inicio -->
         <v-list-item
           prepend-icon="mdi-home-outline"
@@ -229,9 +235,19 @@ const onProfileUpdated = () => {
   snackbar.show = true
 }
 
-watch(() => route.path, () => {
+// Control de grupos abiertos en el sidebar
+const openedGroups = ref<string[]>([])
+
+watch(() => route.path, (newPath) => {
   if (isMobile.value) drawer.value = false
-})
+  
+  // Auto-expandir configuración si estamos en la ruta raíz o subrutas
+  if (newPath === '/configuracion' || newPath.startsWith('/configuracion/')) {
+    if (!openedGroups.value.includes('Settings')) {
+      openedGroups.value = ['Settings']
+    }
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
