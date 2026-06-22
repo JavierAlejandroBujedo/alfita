@@ -37,8 +37,9 @@
                     rounded="lg"
                     :loading="loadingLists"
                     placeholder="Seleccioná tu unidad"
-                    @update:model-value="profile.hierarchy = ''"
-                    hide-details
+                    :rules="[rules.required]"
+                    hide-details="auto"
+                    class="mb-3"
                   />
                 </div>
 
@@ -56,8 +57,9 @@
                     placeholder="Tu rango institucional"
                     :disabled="loadingJer"
                     :loading="loadingJer"
+                    :rules="[rules.required]"
                     no-data-text="Sin jerarquías disponibles para esta repartición"
-                    hide-details
+                    hide-details="auto"
                   />
                   <div v-if="!loadingJer" class="text-caption text-grey ml-1 mt-1">
                     {{ filteredJerarquias.length }} rango{{ filteredJerarquias.length !== 1 ? 's' : '' }} disponible{{ filteredJerarquias.length !== 1 ? 's' : '' }}
@@ -73,8 +75,11 @@
                     density="compact"
                     rounded="lg"
                     placeholder="Ej. 45, 102..."
-                    hide-details
+                    hide-details="auto"
                   />
+                  <div class="text-caption text-grey ml-1 mt-1">
+                    Tus identificadores en los servicios asignados
+                  </div>
                 </div>
               </v-card>
             </v-col>
@@ -92,7 +97,10 @@
                     flat
                     density="compact"
                     rounded="lg"
-                    hide-details
+                    :rules="nameRules"
+                    maxlength="26"
+                    placeholder="Nombre y Apellido"
+                    hide-details="auto"
                   />
                 </div>
 
@@ -106,8 +114,11 @@
                         flat
                         density="compact"
                         rounded="lg"
+                        maxlength="10"
                         @input="formatDNI"
-                        hide-details
+                        :rules="[rules.required, rules.dni]"
+                        placeholder="00.000.000"
+                        hide-details="auto"
                       />
                     </div>
                   </v-col>
@@ -137,7 +148,10 @@
                     density="compact"
                     rounded="lg"
                     prefix="+54 9"
-                    hide-details
+                    :rules="[rules.required, rules.phone]"
+                    maxlength="10"
+                    placeholder="3811234567"
+                    hide-details="auto"
                   />
                 </div>
               </v-card>
@@ -200,23 +214,48 @@ let unsubRep: any = null
 let unsubJer: any = null
 
 // Jerarquías visibles según configuración de la repartición seleccionada
+const rules = {
+  required: (v: any) => !!v || 'Campo obligatorio',
+  dni: (v: string) => /^\d{2}\.\d{3}\.\d{3}$/.test(v) || 'Formato 00.000.000',
+  phone: (v: string) => /^[23]\d{9}$/.test(v) || '10 dígitos (Ej: 381...)'
+}
+
+const nameRules = [
+  (v: string) => !!v || 'Campo obligatorio',
+  (v: string) => v.trim().split(/\s+/).length >= 2 || 'Ingresá nombre y apellido',
+  (v: string) => (v.length >= 3 && v.length <= 26) || 'Entre 3 y 26 caracteres'
+]
+
 const filteredJerarquias = computed(() => {
-  // Sin repartición → mostrar todas las jerarquías disponibles
-  if (!profile.value.reparticion) return jerarquias.value
-  const rep = reparticiones.value.find(r => r.id === profile.value.reparticion)
-  // Repartición aún cargando → mostrar todas para no bloquear al usuario
-  if (!rep) return jerarquias.value
-  // Sin restricción de jerarquía → TODAS las de la colección
-  if (!rep.vinculaJerarquia) return jerarquias.value
-  // Con restricción → filtrar por allowedHierarchyIds
-  const allowedIds: string[] = rep.allowedHierarchyIds || []
-  // Si no se configuraron IDs → todas (sin restricción efectiva)
-  if (allowedIds.length === 0) return jerarquias.value
-  return jerarquias.value.filter(j => allowedIds.includes(j.id))
+  let list = jerarquias.value
+  
+  if (profile.value.reparticion) {
+    const rep = reparticiones.value.find(r => r.id === profile.value.reparticion)
+    if (rep && rep.vinculaJerarquia) {
+      const allowedIds = rep.allowedHierarchyIds || []
+      if (allowedIds.length > 0) {
+        list = jerarquias.value.filter(j => allowedIds.includes(j.id))
+      }
+    }
+  }
+
+  // Garantizar que la jerarquía actual del usuario esté en la lista para evitar campos vacíos
+  if (profile.value.hierarchy) {
+    const exists = list.some(j => j.nombre === profile.value.hierarchy)
+    if (!exists) {
+      const master = jerarquias.value.find(j => j.nombre === profile.value.hierarchy)
+      if (master) {
+        list = [...list, master]
+      }
+    }
+  }
+
+  return list
 })
 
 const formatDNI = (e: any) => {
-  let val = e.target.value.replace(/\D/g, '').substring(0, 8)
+  const input = e.target.value || ''
+  const val = input.replace(/\D/g, '').substring(0, 8)
   const parts: string[] = []
   if (val.length > 0) parts.push(val.substring(0, 2))
   if (val.length > 2) parts.push(val.substring(2, 5))
@@ -286,7 +325,7 @@ watch(() => props.show, async (isVisible) => {
       }
     }
   }
-})
+}, { immediate: true })
 
 const getRoleColor = (role: any) => {
   switch (role) {
