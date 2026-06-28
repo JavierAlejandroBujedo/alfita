@@ -107,20 +107,22 @@
           </div>
         </div>
 
-        <!-- SELECCIONAR HOJA DE SERVICIO VINCULADA -->
         <v-select
-          v-model="selectedServiceId"
+          v-model="selectedServiceIds"
           :items="availableSheets"
           item-title="label"
           item-value="id"
-          label="Vincular al Nº de Servicio"
+          label="Vincular a Nº de Servicio(s)"
           variant="solo-filled"
           flat rounded="lg"
           density="compact"
           hide-details
+          multiple
+          chips
+          closable-chips
           class="mb-4"
           prepend-inner-icon="mdi-link-variant"
-          :rules="[v => !!v || 'Seleccioná una hoja de servicio']"
+          :rules="[v => v.length > 0 || 'Seleccioná al menos una hoja de servicio']"
         >
           <template #item="{ props: itemProps }">
             <v-list-item v-bind="itemProps">
@@ -130,6 +132,20 @@
             </v-list-item>
           </template>
         </v-select>
+
+        <!-- ALERTA TURNOS SIN CONFIGURAR -->
+        <v-alert
+          v-if="sheetsWithoutShifts.length > 0"
+          type="warning"
+          variant="tonal"
+          rounded="lg"
+          density="compact"
+          class="mb-4"
+          icon="mdi-alert"
+        >
+          <strong>Atención:</strong> {{ sheetsWithoutShifts.length }} hoja(s) seleccionada(s) no tienen turnos (horarios) configurados.
+          Los asignados no sabrán en qué horario deben trabajar. Configurá los turnos desde la hoja de servicio antes de solicitar disponibilidad.
+        </v-alert>
 
         <!-- MENSAJE OPCIONAL -->
         <v-textarea
@@ -154,7 +170,7 @@
           class="font-weight-bold"
           :loading="loading"
           @click="handleSend"
-          :disabled="emailList.length === 0 || !selectedServiceId"
+          :disabled="emailList.length === 0 || selectedServiceIds.length === 0"
         >
           <v-icon start>mdi-send</v-icon>
           Enviar Solicitud ({{ emailList.length }})
@@ -184,7 +200,7 @@ const newEmail = ref('')
 const message = ref('')
 const emailList = ref<string[]>([])
 const includeSelf = ref(false)
-const selectedServiceId = ref<string | null>(null)
+const selectedServiceIds = ref<string[]>([])
 const emailError = ref('')
 const isImporting = ref(false)
 
@@ -192,10 +208,22 @@ const currentUserEmail = computed(() => authStore.userData?.email || authStore.u
 
 const availableSheets = computed(() => {
   if (!props.sheets) return []
-  return props.sheets.map(s => ({
-    id: s.id,
-    label: `SVC ${s.svcNumber || '---'} — ${s.month} ${s.year}`
-  }))
+  return props.sheets.map(s => {
+    const hasShifts = (s.shifts || []).some((sh: any) => sh && sh.start)
+    return {
+      id: s.id,
+      label: `SVC ${s.svcNumber || '---'} — ${s.month} ${s.year}${!hasShifts ? ' ⚠️ SIN TURNOS' : ''}`,
+      hasShifts
+    }
+  })
+})
+
+// Alerta si alguna de las hojas seleccionadas no tiene turnos configurados
+const sheetsWithoutShifts = computed(() => {
+  return selectedServiceIds.value.filter(id => {
+    const sheet = availableSheets.value.find(s => s.id === id)
+    return sheet && !sheet.hasShifts
+  })
 })
 
 const isValidEmail = computed(() => {
@@ -223,7 +251,7 @@ watch(() => props.show, (isVisible) => {
     message.value = ''
     newEmail.value = ''
     includeSelf.value = false
-    selectedServiceId.value = null
+    selectedServiceIds.value = []
     emailError.value = ''
   }
 })
@@ -289,7 +317,7 @@ const handleSend = () => {
   emit('send', {
     emails: emailList.value,
     message: message.value,
-    serviceId: selectedServiceId.value
+    serviceIds: selectedServiceIds.value
   })
 }
 </script>

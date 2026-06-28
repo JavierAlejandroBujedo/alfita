@@ -10,7 +10,7 @@
       <!-- HEADER -->
       <v-card-title class="d-flex align-center pb-6">
         <v-avatar color="primary" variant="tonal" size="56" class="mr-4">
-          <v-icon :icon="user?.role === 1 ? 'mdi-shield-account' : 'mdi-account-details'"></v-icon>
+          <v-icon :icon="user?.role === 1 ? 'mdi-shield-crown' : (user?.role === 2 ? 'mdi-account-star' : 'mdi-account-tie')"></v-icon>
         </v-avatar>
         <div class="flex-grow-1">
           <div class="text-h6 font-weight-bold">Ficha de Usuario</div>
@@ -119,15 +119,34 @@
 
                 <div>
                   <div class="text-caption font-weight-bold text-grey-darken-2 ml-2 mb-1">Nº DE SVC</div>
+                  
+                  <div class="d-flex flex-wrap gap-2 mb-2 px-2">
+                    <v-chip
+                      v-for="(svc, index) in localData.svcNumbers"
+                      :key="index"
+                      closable
+                      size="small"
+                      color="primary"
+                      variant="flat"
+                      class="mr-2 mb-1"
+                      @click="startEditSvc(index)"
+                      @click:close="removeSvc(index)"
+                    >
+                      {{ svc }}
+                    </v-chip>
+                  </div>
+
                   <v-text-field
-                    v-model="localData.svcNumber"
+                    v-model="svcInput"
                     variant="solo-filled"
                     flat
                     rounded="lg"
                     density="comfortable"
-                    append-inner-icon="mdi-pencil"
-                    :rules="[v => !!v && v.length >= 2 || 'Min 2 carac.']"
+                    placeholder="Agregar Nº SVC..."
+                    append-inner-icon="mdi-plus"
                     hide-details="auto"
+                    @click:append-inner="addSvc"
+                    @keydown.enter.prevent="addSvc"
                   />
                 </div>
               </v-card>
@@ -222,6 +241,30 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- DIALOGO EDICIÓN SVC -->
+  <v-dialog v-model="svcDialog" max-width="300">
+    <v-card rounded="xl" class="pa-4">
+      <v-card-title class="text-subtitle-1 font-weight-bold">Editar SVC</v-card-title>
+      <v-card-text class="pa-2">
+        <v-text-field
+          v-model="editingSvcValue"
+          variant="solo-filled"
+          flat
+          density="compact"
+          rounded="lg"
+          hide-details
+          autofocus
+          @keydown.enter="saveEditSvc"
+        />
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" color="grey" @click="svcDialog = false">Cancelar</v-btn>
+        <v-btn color="primary" variant="flat" rounded="pill" @click="saveEditSvc">Guardar</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup lang="ts">
@@ -245,10 +288,16 @@ const localData = ref({
   dni: '',
   personalEmail: '',
   phone: '',
-  svcNumber: '',
+  svcNumbers: [] as string[],
   reparticion: '',
+  role: 3 as number,
   membershipType: 'GRATIS'
 })
+
+const svcInput = ref('')
+const editingSvcIndex = ref<number | null>(null)
+const editingSvcValue = ref('')
+const svcDialog = ref(false)
 
 const filteredJerarquias = computed(() => {
   if (!localData.value.reparticion) return []
@@ -294,8 +343,94 @@ onMounted(async () => {
 })
 
 watch(() => props.user, (newVal) => {
-  if (newVal) localData.value = { ...newVal, membershipType: newVal.membershipType || 'GRATIS' }
+  if (newVal) {
+    let svcNumbers: string[] = []
+    if (newVal.svcNumbers && Array.isArray(newVal.svcNumbers)) {
+      svcNumbers = newVal.svcNumbers
+    } else if (newVal.svcNumber) {
+      svcNumbers = [newVal.svcNumber]
+    }
+
+    localData.value = { 
+      ...newVal, 
+      svcNumbers: svcNumbers,
+      membershipType: newVal.membershipType || 'GRATIS' 
+    }
+  }
 }, { immediate: true })
+
+const addSvc = async () => {
+  const val = svcInput.value.trim()
+  if (!val) return
+  
+  // Limites por membresía (Solo si el usuario en edición es Designador y no Admin)
+  if (localData.value.role === 2) {
+    const isAlfa = localData.value.membershipType === 'ALFA'
+    if (!isAlfa && localData.value.svcNumbers.length >= 1) {
+      alert('Este usuario ya tiene un SVC asignado. Requiere membresía ALFA para tener más de uno.')
+      return
+    }
+  }
+
+  if (localData.value.svcNumbers.includes(val)) {
+    svcInput.value = ''
+    return
+  }
+
+  // Registrar en colección central y verificar titularidad
+  try {
+    const { setDoc, serverTimestamp, doc: fsDoc } = await import('firebase/firestore')
+    const svcRef = fsDoc(db, 'svcs', val)
+
+    // Delegación automática: Si el Admin lo asigna a este usuario, este usuario se vuelve el titular
+    await setDoc(svcRef, {
+      number: val,
+      lastUsedAt: serverTimestamp(),
+      ownerUid: props.user.uid, // Delegación directa del Admin
+      updatedByAdmin: true 
+    }, { merge: true })
+
+    if (!localData.value.svcNumbers) localData.value.svcNumbers = []
+    localData.value.svcNumbers.push(val)
+    svcInput.value = ''
+  } catch (err) {
+    console.warn('[AdminModal] Error registrando SVC central:', err)
+  }
+}
+
+const removeSvc = (index: number) => {
+  localData.value.svcNumbers.splice(index, 1)
+}
+
+const startEditSvc = (index: number) => {
+  editingSvcIndex.value = index
+  editingSvcValue.value = localData.value.svcNumbers[index]
+  svcDialog.value = true
+}
+
+const saveEditSvc = async () => {
+  const val = editingSvcValue.value.trim()
+  if (val && editingSvcIndex.value !== null) {
+    const exists = localData.value.svcNumbers.some((s, idx) => s === val && idx !== editingSvcIndex.value)
+    if (!exists) {
+      localData.value.svcNumbers[editingSvcIndex.value] = val
+      
+      // Registrar en colección central
+      try {
+        const { setDoc, serverTimestamp, doc } = await import('firebase/firestore')
+        await setDoc(doc(db, 'svcs', val), {
+          number: val,
+          lastUsedAt: serverTimestamp(),
+          updatedByAdmin: true
+        }, { merge: true })
+      } catch (err) {
+        console.warn('[AdminModal] Error actualizando SVC central:', err)
+      }
+    }
+  }
+  svcDialog.value = false
+  editingSvcIndex.value = null
+}
 
 const onReparticionChange = () => localData.value.hierarchy = ''
 

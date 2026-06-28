@@ -1,10 +1,16 @@
 <template>
-  <div class="billing-view pa-4 pa-md-8">
-    <!-- Selector Superior Estilo Pastilla -->
-    <div class="d-flex justify-center mb-10 mt-4">
+  <div class="billing-view">
+    <!-- Cabecera con botón volver -->
+    <div class="d-flex align-center mb-6">
+      <v-btn icon="mdi-arrow-left" variant="text" color="grey-darken-1" to="/inicio" class="mr-2" />
+      <h2 class="text-h5 font-weight-black">Suscripciones</h2>
+    </div>
+
+    <!-- Selector Superior Estilo Pastilla (Sincronizado con Perfil) -->
+    <div class="d-flex justify-center mb-10">
       <div class="selector-container bg-grey-lighten-4 pa-1 rounded-pill d-flex">
         <v-btn
-          @click="activeCategory = 'Designador'"
+          @click="toggleCategory('Designador')"
           :variant="activeCategory === 'Designador' ? 'flat' : 'text'"
           :color="activeCategory === 'Designador' ? 'primary' : 'grey-darken-1'"
           rounded="pill"
@@ -14,7 +20,7 @@
           Designador
         </v-btn>
         <v-btn
-          @click="activeCategory = 'Asignado'"
+          @click="toggleCategory('Asignado')"
           :variant="activeCategory === 'Asignado' ? 'flat' : 'text'"
           :color="activeCategory === 'Asignado' ? 'primary' : 'grey-darken-1'"
           rounded="pill"
@@ -130,14 +136,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../../../plugins/firebase'
+import { useAuthStore } from '../../auth/stores/authStore'
 
+const authStore = useAuthStore()
 const loading = ref(true)
-const activeCategory = ref('Designador')
+const activeCategory = ref(authStore.userRole === 2 ? 'Designador' : 'Asignado')
 const plans = ref<any[]>([])
 const planQuantities = reactive<Record<string, number>>({})
+
+// Sincronizar categoría con el rol del store
+watch(() => authStore.userRole, (newRole) => {
+  activeCategory.value = newRole === 2 ? 'Designador' : 'Asignado'
+})
+
+const toggleCategory = (cat: string) => {
+  activeCategory.value = cat
+}
 
 onMounted(() => {
   const q = query(collection(db, 'subscriptions'), where('visible', '==', true))
@@ -159,7 +176,7 @@ onMounted(() => {
 })
 
 const filteredPlans = computed(() => {
-  return plans.value.filter(p => p.category === activeCategory.value)
+  return plans.value.filter(p => p.category === activeCategory.value || p.category === 'Ambos' || !p.category)
 })
 
 const updateQuantity = (planId: string, delta: number) => {
@@ -178,7 +195,6 @@ const formatPrice = (price: number) => {
   return new Intl.NumberFormat('es-AR').format(price)
 }
 
-import { reactive } from 'vue'
 </script>
 
 <style scoped>

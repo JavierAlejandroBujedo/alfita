@@ -110,17 +110,15 @@ defineEmits(['edit', 'updateRole', 'delete'])
 
 const roleOptions = [
   { label: 'Admin', value: 1 },
-  { label: 'Alfita', value: 2 },
-  { label: 'Designador', value: 3 },
-  { label: 'Asignado', value: 4 }
+  { label: 'Designador', value: 2 },
+  { label: 'Asignado', value: 3 }
 ]
 
 const getRoleLabel = (role: number) => {
   switch (role) {
     case 1: return 'Admin'
-    case 2: return 'Alfita'
-    case 3: return 'Designador'
-    case 4: return 'Asignado'
+    case 2: return 'Designador'
+    case 3: return 'Asignado'
     default: return 'Usuario'
   }
 }
@@ -128,9 +126,8 @@ const getRoleLabel = (role: number) => {
 const getRoleColor = (role: number) => {
   switch (role) {
     case 1: return 'deep-purple-lighten-5'
-    case 2: return 'blue-lighten-5'
-    case 3: return 'amber-lighten-4'
-    case 4: return 'green-lighten-5'
+    case 2: return 'amber-lighten-4'
+    case 3: return 'green-lighten-5'
     default: return 'grey-lighten-4'
   }
 }
@@ -138,9 +135,8 @@ const getRoleColor = (role: number) => {
 const getRoleIcon = (role: number) => {
   switch (role) {
     case 1: return 'mdi-shield-crown'
-    case 2: return 'mdi-account-heart-outline'
-    case 3: return 'mdi-account-star'
-    case 4: return 'mdi-account-tie'
+    case 2: return 'mdi-account-star'
+    case 3: return 'mdi-account-tie'
     default: return 'mdi-account'
   }
 }

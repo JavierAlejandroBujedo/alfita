@@ -73,7 +73,7 @@ const goHome = () => router.push('/')
 
 const checkAccess = async (serviceData: any) => {
   // 1. Admins y Designadores tienen acceso total
-  if (authStore.userRole === 1 || authStore.userRole === 3) return true
+  if (authStore.userRole === 1 || authStore.userRole === 2) return true
 
   // 2. Verificar vinculación directa (service_links)
   const qLinks = query(
@@ -84,11 +84,21 @@ const checkAccess = async (serviceData: any) => {
   const linkSnap = await getDocs(qLinks)
   if (!linkSnap.empty) return true
 
-  // 3. Verificar por número de servicio en el perfil (si aplica)
-  const userSvc = authStore.userData?.svcNumber
-  if (userSvc && serviceData.svcNumber) {
-     const mySvcs = String(userSvc).split(',').map(s => s.trim())
-     if (mySvcs.includes(String(serviceData.svcNumber))) return true
+  // 3. Verificar por número de servicio en el perfil
+  const svcNumbers = authStore.userData?.svcNumbers
+  const svcNumberLegacy = authStore.userData?.svcNumber
+  
+  if (serviceData.svcNumber) {
+    const targetSvc = String(serviceData.svcNumber).trim()
+    
+    // Verificar en array nuevo
+    if (Array.isArray(svcNumbers) && svcNumbers.includes(targetSvc)) return true
+    
+    // Verificar en campo legacy (string separado por comas)
+    if (svcNumberLegacy) {
+      const mySvcs = String(svcNumberLegacy).split(',').map(s => s.trim())
+      if (mySvcs.includes(targetSvc)) return true
+    }
   }
 
   return false

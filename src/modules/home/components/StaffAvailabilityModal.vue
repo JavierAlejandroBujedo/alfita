@@ -31,10 +31,15 @@
         </div>
 
         <!-- SIN DATOS -->
-        <div v-else-if="filteredAvailability.length === 0" class="text-center py-8">
-          <v-icon size="48" color="grey-lighten-1" class="mb-3">mdi-calendar-remove</v-icon>
-          <div class="text-body-1 text-grey-darken-1 font-weight-medium">
-            {{ selectedServiceId ? 'Nadie ha enviado su disponibilidad para este servicio aún.' : 'Seleccioná un servicio para ver la disponibilidad.' }}
+        <div v-else-if="filteredAvailability.length === 0" class="text-center py-12">
+          <v-icon size="64" color="grey-lighten-2" class="mb-4">mdi-calendar-question</v-icon>
+          <div v-if="selectedServiceId" class="px-6">
+            <div class="text-h6 font-weight-bold text-grey-darken-2">Sin respuestas aún</div>
+            <p class="text-body-2 text-grey">Ningún guardia ha cargado su disponibilidad para este servicio todavía.</p>
+          </div>
+          <div v-else class="px-6">
+            <div class="text-h6 font-weight-bold text-grey-darken-2">Esperando selección</div>
+            <p class="text-body-2 text-grey">Por favor, elegí un servicio arriba para ver quiénes están disponibles.</p>
           </div>
         </div>
 

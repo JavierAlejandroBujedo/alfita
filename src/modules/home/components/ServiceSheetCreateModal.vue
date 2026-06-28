@@ -44,15 +44,18 @@
                     />
                   </v-col>
                   <v-col cols="12" md="5">
-                    <v-text-field
+                    <v-combobox
                       v-model="form.svcNumber"
+                      :items="userSvcs"
                       label="Nº de SVC"
                       variant="solo-filled"
                       flat
                       rounded="lg"
                       density="compact"
-                      placeholder="Ej. 000086"
-                      hide-details
+                      placeholder="Elegir o escribir nuevo"
+                      hint="Se guardará automáticamente en tu perfil"
+                      persistent-hint
+                      :rules="[v => !!v || 'Debe ingresar el Nº de SVC']"
                     />
                   </v-col>
                   <v-col cols="12">
@@ -81,12 +84,46 @@
                     <v-text-field v-model="form.domicilio" label="Domicilio (Calle)" variant="solo-filled" flat rounded="lg" density="compact" hide-details />
                   </v-col>
                   <v-col cols="3">
-                    <v-text-field v-model="form.nroDomicilio" label="Nº" variant="solo-filled" flat rounded="lg" density="compact" hide-details />
+                    <v-text-field 
+                      v-model="form.nroDomicilio" 
+                      label="Nº" 
+                      variant="solo-filled" 
+                      flat rounded="lg" 
+                      density="compact" 
+                      hide-details 
+                      type="number"
+                    />
                   </v-col>
                 </v-row>
-                <v-text-field v-model="form.telefonoEntidad" label="Teléfono Entidad" variant="solo-filled" flat rounded="lg" density="compact" hide-details class="mb-1" />
-                <v-text-field v-model="form.referente" label="Referente de la entidad" variant="solo-filled" flat rounded="lg" density="compact" hide-details class="mb-1" />
-                <v-text-field v-model="form.telefonoReferente" label="Teléfono Referente" variant="solo-filled" flat rounded="lg" density="compact" hide-details class="mb-1" />
+                <v-text-field 
+                  v-model="form.telefonoEntidad" 
+                  label="Teléfono Entidad" 
+                  variant="solo-filled" 
+                  flat rounded="lg" 
+                  density="compact" 
+                  hide-details 
+                  class="mb-1" 
+                  type="number"
+                />
+                <v-text-field 
+                  v-model="form.referente" 
+                  label="Referente de la entidad" 
+                  variant="solo-filled" 
+                  flat rounded="lg" 
+                  density="compact" 
+                  hide-details 
+                  class="mb-1" 
+                />
+                <v-text-field 
+                  v-model="form.telefonoReferente" 
+                  label="Teléfono Referente" 
+                  variant="solo-filled" 
+                  flat rounded="lg" 
+                  density="compact" 
+                  hide-details 
+                  class="mb-1" 
+                  type="number"
+                />
                 <v-row density="compact">
                   <v-col cols="12" md="6"><v-text-field v-model="form.barrio" label="Barrio" variant="solo-filled" flat rounded="lg" density="compact" hide-details /></v-col>
                   <v-col cols="12" md="6"><v-text-field v-model="form.comisaria" label="Comisaría" variant="solo-filled" flat rounded="lg" density="compact" hide-details /></v-col>
@@ -181,6 +218,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { db } from '../../../plugins/firebase'
 import { useAuthStore } from '../../../modules/auth/stores/authStore'
 
 const props = defineProps<{
@@ -191,6 +230,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['close', 'save'])
 const authStore = useAuthStore()
+const userSvcs = computed(() => authStore.userData?.svcNumbers || [])
 
 const months = [
   'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
@@ -227,7 +267,9 @@ const form = reactive({
 })
 
 const isFormIncomplete = computed(() => {
-  return form.entidad.trim() !== '' && form.month !== ''
+  return form.entidad.trim() !== '' && 
+         form.month !== '' && 
+         form.svcNumber.trim() !== ''
 })
 
 // Llenar datos (Nuevo o Edición)
@@ -274,7 +316,24 @@ watch([() => form.month, () => form.year], ([newMonth, newYear]) => {
   }
 })
 
-const handleSave = () => {
+const handleSave = async () => {
+  // 1. Si el SVC es nuevo para el usuario, guardarlo en su perfil
+  if (authStore.user?.uid && form.svcNumber) {
+    const isNewSvc = !userSvcs.value.includes(form.svcNumber)
+    if (isNewSvc) {
+      try {
+        const userRef = doc(db, 'users', authStore.user.uid)
+        await updateDoc(userRef, {
+          svcNumbers: arrayUnion(form.svcNumber)
+        })
+        console.log('[CreateModal] Nuevo SVC guardado en perfil:', form.svcNumber)
+      } catch (err) {
+        console.error('[CreateModal] Error vinculando SVC al perfil:', err)
+      }
+    }
+  }
+
+  // 2. Emitir el guardado de la planilla
   emit('save', { ...form })
 }
 </script>

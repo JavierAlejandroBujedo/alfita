@@ -1,11 +1,11 @@
 <template>
   <div class="shift-manager">
     <div class="d-flex align-center mb-6">
-      <h2 class="text-h5 font-weight-black">Mi Agenda de Turnos</h2>
-      <v-spacer />
+      <v-btn icon="mdi-arrow-left" variant="text" color="grey-darken-1" to="/inicio" class="mr-2" />
       <v-chip color="primary" variant="tonal" class="font-weight-bold">
         {{ myAssignments.length }} TURNOS CONFIRMADOS
       </v-chip>
+      <v-spacer />
     </div>
 
     <!-- CARGANDO -->
@@ -16,32 +16,42 @@
     </v-row>
 
     <!-- GRILLA DE TURNOS -->
-    <v-row v-else-if="myAssignments.length > 0">
-      <v-col v-for="(shift, idx) in myAssignments" :key="idx" cols="12" md="4">
-        <v-card class="shift-card border pa-4" rounded="xl" elevation="0">
-          <div class="d-flex justify-space-between align-start mb-4">
+    <v-row v-else-if="myAssignments.length > 0" dense>
+      <v-col v-for="(shift, idx) in myAssignments" :key="idx" cols="6" sm="4" md="3">
+        <v-card class="shift-card border pa-3 h-100" rounded="xl" elevation="0">
+          <div class="d-flex justify-space-between align-start mb-2">
             <div>
-              <div class="text-overline text-success font-weight-black line-height-1">
+              <div class="text-caption text-success font-weight-black line-height-1" style="font-size: 0.65rem !important;">
                 CONFIRMADO
               </div>
-              <h3 class="text-h6 font-weight-bold">{{ shift.entidad }}</h3>
+              <h3 class="text-subtitle-2 font-weight-bold text-truncate" style="max-width: 140px;">{{ shift.entidad }}</h3>
             </div>
-            <v-icon color="grey-lighten-2">mdi-check-decagram</v-icon>
+            <div class="d-flex align-center">
+              <v-icon color="success" size="18" class="mr-1">mdi-check-decagram</v-icon>
+              <v-btn
+                icon="mdi-close"
+                size="x-small"
+                variant="tonal"
+                color="error"
+                class="ml-1"
+                @click.stop="confirmRemove(shift)"
+              ></v-btn>
+            </div>
           </div>
+          
+          <v-divider class="mb-3" />
 
-          <v-divider class="mb-4" />
-
-          <div class="d-flex align-center mb-2">
-            <v-icon size="18" class="mr-2" color="primary">mdi-calendar-range</v-icon>
-            <span class="text-body-2 font-weight-bold text-grey-darken-2">
-              Día {{ shift.dayNum }} de {{ shift.month }} {{ shift.year }}
+          <div class="d-flex align-center mb-1">
+            <v-icon size="14" class="mr-2" color="primary">mdi-calendar-range</v-icon>
+            <span class="text-caption font-weight-bold text-grey-darken-2">
+              Día {{ shift.dayNum }} de {{ shift.month }}
             </span>
           </div>
 
-          <div class="d-flex align-center mb-6">
-            <v-icon size="18" class="mr-2" color="primary">mdi-clock-outline</v-icon>
-            <span class="text-body-2 font-weight-bold text-grey-darken-2">
-              Turno: {{ shift.start }} - {{ shift.end }}
+          <div class="d-flex align-center mb-1">
+            <v-icon size="14" class="mr-2" color="primary">mdi-clock-outline</v-icon>
+            <span class="text-caption font-weight-bold text-grey-darken-2">
+              {{ shift.start }} - {{ shift.end }}
             </span>
           </div>
 
@@ -56,19 +66,49 @@
       <div class="text-h6 text-grey-darken-1 font-weight-bold">No tenés turnos asignados para este periodo</div>
       <div class="text-body-2 text-grey">Cuando el Designador confirme la planilla, tus turnos aparecerán aquí.</div>
     </v-card>
+    
+    <!-- DIÁLOGO CONFIRMACIÓN -->
+    <v-dialog v-model="deleteDialog.show" max-width="400">
+      <v-card rounded="xl" class="pa-4">
+        <v-card-title class="text-h6 font-weight-black d-flex align-center">
+          <v-icon color="error" class="mr-2">mdi-alert-circle-outline</v-icon>
+          ¿Eliminar turno?
+        </v-card-title>
+        <v-card-text class="pt-2 text-body-1">
+          Estás por eliminar tu turno en <span class="font-weight-bold">{{ deleteDialog.entidad }}</span> 
+          del día <span class="font-weight-bold">{{ deleteDialog.day }}</span>. 
+          <br><br>
+          Esta posición quedará vacante en la planilla general. ¿Confirmar?
+        </v-card-text>
+        <v-card-actions class="pt-4">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" color="grey" @click="deleteDialog.show = false">Cancelar</v-btn>
+          <v-btn color="error" variant="elevated" rounded="pill" class="px-6 font-weight-bold" :loading="removing" @click="handleRemove">
+            Eliminar
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" rounded="pill" timeout="3000">
+      {{ snackbar.text }}
+    </v-snackbar>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import { ref, onMounted, onUnmounted, computed, reactive } from 'vue'
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteField } from 'firebase/firestore'
 import { db } from '../../../plugins/firebase'
 import { useAuthStore } from '../../auth/stores/authStore'
 
 const authStore = useAuthStore()
 const loading = ref(true)
+const removing = ref(false)
 const assignmentsData = ref<any[]>([])
+const deleteDialog = reactive({ show: false, entidad: '', day: '', sheetId: '', dayNum: '', shiftIdx: '' })
+const snackbar = reactive({ show: false, text: '', color: 'success' })
 let unsubscribe: any = null
 
 const myAssignments = computed(() => {
@@ -100,13 +140,27 @@ const myAssignments = computed(() => {
       // Recorrer los turnos del día
       Object.entries(shiftsMap).forEach(([sIdx, identity]: [string, any]) => {
         if (identity === myIdentity) {
+          const dayNum = parseInt(day)
           const shiftInfo = sheet.shifts[parseInt(sIdx)]
+          
           if (shiftInfo) {
+            // LÓGICA DE AUTO-LIMPIEZA (AUTO-PURGE)
+            const shiftDate = new Date(sheetYear, sheetMonthIdx, dayNum)
+            const oneDayAfter = new Date(shiftDate)
+            oneDayAfter.setDate(oneDayAfter.getDate() + 1)
+
+            if (now > oneDayAfter) {
+              // El turno ya pasó hace más de 24hs, lo purgamos de Firebase
+              autoPurgeAssignment(sheet.id, day, sIdx)
+              return // No lo añadimos a la lista visual
+            }
+
             results.push({
               entidad: sheet.entidad || 'Servicio General',
               month: sheet.month,
               year: sheet.year,
               dayNum: day,
+              shiftIdx: sIdx,
               start: shiftInfo.start,
               end: shiftInfo.end,
               sheetId: sheet.id
@@ -137,6 +191,56 @@ onMounted(() => {
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
 })
+
+const confirmRemove = (shift: any) => {
+  deleteDialog.entidad = shift.entidad
+  deleteDialog.day = `${shift.dayNum} ${shift.month}`
+  deleteDialog.sheetId = shift.sheetId
+  deleteDialog.dayNum = shift.dayNum
+  deleteDialog.shiftIdx = shift.shiftIdx
+  deleteDialog.show = true
+}
+
+const handleRemove = async () => {
+  if (!deleteDialog.sheetId) return
+  removing.value = true
+  try {
+    const sheetRef = doc(db, 'servicios', deleteDialog.sheetId)
+    
+    // El formato de Firestore es assignments.{dia}.{indice_turno}
+    const path = `assignments.${deleteDialog.dayNum}.${deleteDialog.shiftIdx}`
+    
+    await updateDoc(sheetRef, {
+      [path]: deleteField()
+    })
+    
+    snackbar.text = 'Turno eliminado correctamente'
+    snackbar.color = 'success'
+    snackbar.show = true
+    deleteDialog.show = false
+  } catch (err) {
+    console.error('[ShiftManager] Error eliminando turno:', err)
+    snackbar.text = 'Error al eliminar el turno'
+    snackbar.color = 'error'
+    snackbar.show = true
+  } finally {
+    removing.value = false
+  }
+}
+
+// Función para purga automática silenciosa de turnos viejos
+const autoPurgeAssignment = async (sheetId: string, day: string, sIdx: string) => {
+  try {
+    const sheetRef = doc(db, 'servicios', sheetId)
+    const path = `assignments.${day}.${sIdx}`
+    await updateDoc(sheetRef, {
+      [path]: deleteField()
+    })
+    console.log(`[AutoPurge] Turno expirado eliminado: ${sheetId} - Día ${day}`)
+  } catch (err) {
+    console.warn('[AutoPurge] Error purgando turno viejo:', err)
+  }
+}
 </script>
 
 <style scoped>

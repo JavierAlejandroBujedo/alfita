@@ -43,14 +43,13 @@
           class="mb-2"
         />
 
-        <!-- 3. Mi Perfil (abre modal + URL /mi-perfil) -->
         <v-list-item
           prepend-icon="mdi-account-circle-outline"
           title="Mi Perfil"
           color="primary"
           rounded="pill"
           class="mb-2"
-          :active="profileModalShow"
+          :active="authStore.showProfileModal"
           @click="openProfile"
         />
 
@@ -64,7 +63,7 @@
           class="mb-2"
         />
 
-        <!-- 5. CONFIGURACIÓN (ADMIN SOLAMENTE) -->
+        <!-- 5. CONFIGURACIÓN (ADMIN) -->
         <v-list-group v-if="authStore.userRole === 1" value="Settings">
           <template v-slot:activator="{ props }">
             <v-list-item
@@ -143,7 +142,8 @@
 
     <!-- Modal de Perfil Global -->
     <ProfileModal 
-      :show="profileModalShow" 
+      :show="authStore.showProfileModal" 
+      :persistent="authStore.isProfileIncomplete"
       @close="closeProfile" 
       @updated="onProfileUpdated"
     />
@@ -174,9 +174,8 @@ const route = useRoute()
 const sidebarColor = computed(() => {
   switch (authStore.userRole) {
     case 1: return 'deep-purple-lighten-5' // Admin (Púrpura suave)
-    case 2: return 'blue-lighten-5'        // Alfita (Celeste suave)
-    case 3: return 'amber-lighten-4'       // Designador (Naranja suave)
-    case 4: return 'green-lighten-5'       // Asignado (Verde suave)
+    case 2: return 'amber-lighten-4'       // Designador (Naranja suave)
+    case 3: return 'green-lighten-5'       // Asignado (Verde suave)
     default: return 'grey-lighten-4'
   }
 })
@@ -187,15 +186,15 @@ const isSidebarDark = computed(() => {
   return false
 })
 
-const profileModalShow = ref(false)
 const snackbar = reactive({ show: false, text: '', color: 'success' })
 
 const openProfile = () => {
-  profileModalShow.value = true
+  authStore.showProfileModal = true
 }
 
 const closeProfile = () => {
-  profileModalShow.value = false
+  authStore.showProfileModal = false
+  authStore.shouldFocusSvc = false
 }
 
 const currentRouteTitle = computed(() => {
@@ -206,7 +205,7 @@ const currentRouteTitle = computed(() => {
         const firstWord = name.trim().split(' ')[0]
         return `¡Hola ${firstWord}!`
       }
-      return 'Panel de Inicio'
+      return '¡Hola!'
     } 
     case 'profile': return 'Mi Perfil'
     case 'subscription': return 'Suscripción'
@@ -248,6 +247,8 @@ watch(() => route.path, (newPath) => {
     }
   }
 }, { immediate: true })
+
+
 </script>
 
 <style scoped>

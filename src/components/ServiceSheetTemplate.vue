@@ -7,6 +7,17 @@
         <v-toolbar-title class="text-white font-weight-bold">Vista Previa de Planilla</v-toolbar-title>
         <v-spacer></v-spacer>
         <v-btn
+          v-if="isDesignadorOrAdmin"
+          prepend-icon="mdi-auto-fix"
+          variant="elevated"
+          color="amber-darken-3"
+          class="mr-2 font-weight-bold"
+          :loading="autoFilling"
+          @click="startAutoFill"
+        >
+          Autocompletar
+        </v-btn>
+        <v-btn
           prepend-icon="mdi-printer"
           variant="elevated"
           color="white"
@@ -214,11 +225,32 @@
       </v-card-text>
     </v-card>
   </v-dialog>
+
+  <!-- DIÁLOGO AUTOCOMPLETAR -->
+  <v-dialog v-model="autoFillDialog" max-width="500" persistent>
+    <v-card rounded="xl" class="pa-6">
+      <v-icon color="amber-darken-3" size="48" class="mb-3 d-block mx-auto">mdi-auto-fix</v-icon>
+      <v-card-title class="text-h6 font-weight-bold text-center pb-2">Autocompletar Planilla</v-card-title>
+      <v-card-text class="text-body-2 text-center text-grey-darken-1 pb-4">
+        El sistema asignará equitativamente las disponibilidades enviadas entre los turnos libres.
+        <br><br>
+        <strong>No duplicará</strong> a ningún usuario en el mismo turno/día en otras hojas del mismo servicio.
+        <br><br>
+        <v-chip color="amber-darken-3" variant="tonal" size="small" class="font-weight-bold">
+          {{ autoFillStats.available }} personas disponibles | {{ autoFillStats.empty }} celdas vacías
+        </v-chip>
+      </v-card-text>
+      <v-card-actions class="justify-center ga-3">
+        <v-btn variant="text" color="grey" @click="autoFillDialog = false">Cancelar</v-btn>
+        <v-btn color="amber-darken-3" variant="flat" rounded="pill" class="px-8 font-weight-bold" @click="confirmAutoFill" :loading="autoFilling">Confirmar</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../plugins/firebase'
 import { useAuthStore } from '../modules/auth/stores/authStore'
 
@@ -236,6 +268,9 @@ const authStore = useAuthStore()
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+const autoFilling = ref(false)
+const autoFillDialog = ref(false)
+const autoFillStats = ref({ available: 0, empty: 0 })
 
 // Estado local para reactividad inmediata
 const localAssignments = ref<Record<string, Record<string, string>>>({})
@@ -245,7 +280,7 @@ watch(() => props.sheet.assignments, (newVal) => {
 }, { deep: true, immediate: true })
 
 const isDesignadorOrAdmin = computed(() => {
-  return authStore.userRole === 1 || authStore.userRole === 3
+  return authStore.userRole === 1 || authStore.userRole === 2
 })
 
 const daysInMonth = computed(() => {
@@ -305,12 +340,12 @@ const formatIdentity = (user: any) => {
 
 const setAssignment = async (day: number, shiftIdx: number, user: any | null) => {
   if (!props.sheet?.id) return
-  
+
   try {
     if (!localAssignments.value[day.toString()]) {
       localAssignments.value[day.toString()] = {}
     }
-    
+
     const identity = user ? formatIdentity(user) : ''
     if (identity) {
       localAssignments.value[day.toString()][shiftIdx.toString()] = identity
@@ -318,13 +353,12 @@ const setAssignment = async (day: number, shiftIdx: number, user: any | null) =>
       delete localAssignments.value[day.toString()][shiftIdx.toString()]
     }
 
-    // Actualizar Firestore en segundo plano
     const firestoreAssignments = JSON.parse(JSON.stringify(localAssignments.value))
-    await updateDoc(doc(db, 'servicios', props.sheet.id), {
+    await updateDoc(doc(db, 'serviceSheets', props.sheet.id), {
       assignments: firestoreAssignments
     })
-    
-    snackbarText.value = user ? `Asignado a ${user.userName}` : 'Asignación quitada'
+
+    snackbarText.value = user ? `Asignado: ${formatIdentity(user)}` : 'Asignación quitada'
     snackbarColor.value = 'success'
     snackbar.value = true
   } catch (err) {
@@ -332,6 +366,127 @@ const setAssignment = async (day: number, shiftIdx: number, user: any | null) =>
     snackbarText.value = 'Error al actualizar asignación'
     snackbarColor.value = 'error'
     snackbar.value = true
+  }
+}
+
+// ─── AUTOCOMPLETAR ───────────────────────────────────────────────────────────
+const startAutoFill = async () => {
+  if (!props.availability || activeShifts.value.length === 0) {
+    snackbarText.value = 'No hay turnos configurados o no hay disponibilidades'
+    snackbarColor.value = 'error'
+    snackbar.value = true
+    return
+  }
+
+  // Contar celdas vacías
+  let empty = 0
+  daysInMonth.value.forEach(day => {
+    activeShifts.value.forEach((_: unknown, sIdx: number) => {
+      if (!getAssignment(day.dayNum, sIdx)) empty++
+    })
+  })
+
+  const available = new Set(
+    (props.availability || []).filter(a => a.serviceId === props.sheet.id).map(a => a.userId)
+  ).size
+
+  autoFillStats.value = { available, empty }
+  autoFillDialog.value = true
+}
+
+const confirmAutoFill = async () => {
+  if (!props.sheet?.id || !props.availability) return
+  autoFilling.value = true
+  autoFillDialog.value = false
+
+  try {
+    // 1. Buscar todas las hojas hermanas (mismo SVC + mismo mes + mismo año)
+    const siblingsSnap = await getDocs(query(
+      collection(db, 'serviceSheets'),
+      where('svcNumber', '==', props.sheet.svcNumber),
+      where('month', '==', props.sheet.month),
+      where('year', '==', props.sheet.year)
+    ))
+    // siblingSheetIds used implicitly via siblingsSnap.docs below
+
+    // 2. Recopilar asignaciones ya existentes en hojas hermanas (para evitar duplicados)
+    // Map: 'userId-dayNum-shiftIdx' => true
+    const occupiedSlots = new Set<string>()
+    siblingsSnap.docs.forEach(d => {
+      const sibAssignments: Record<string, Record<string, string>> = d.data().assignments || {}
+      Object.entries(sibAssignments).forEach(([dayStr, shifts]) => {
+        Object.entries(shifts).forEach(([sIdxStr, name]) => {
+          if (name && d.id !== props.sheet.id) {
+            // Guardamos la identidad textual para bloquear duplicados
+            occupiedSlots.add(`${name}|${dayStr}|${sIdxStr}`)
+          }
+        })
+      })
+    })
+
+    // 3. Obtener disponibilidades de esta hoja
+    const thisAvailability = (props.availability || []).filter(a => a.serviceId === props.sheet.id)
+
+    // 4. Construir mapa: dia -> turno -> [usuarios disponibles]
+    const slotPool: Record<string, Record<string, any[]>> = {}
+    daysInMonth.value.forEach(day => {
+      slotPool[day.dayNum] = {}
+      activeShifts.value.forEach((_: unknown, sIdx: number) => {
+        const avUsers = thisAvailability.filter(a => {
+          if (a.selections) return a.selections[day.dayNum.toString()]?.includes(sIdx)
+          return (a.days || []).includes(day.dayNum) && (a.shiftIndexes || []).includes(sIdx)
+        })
+        slotPool[day.dayNum][sIdx] = avUsers
+      })
+    })
+
+    // 5. Conteo de asignaciones por usuario (para balance equitativo)
+    const userAssignCount: Record<string, number> = {}
+    thisAvailability.forEach(a => { userAssignCount[a.userId] = 0 })
+
+    // 6. Asignar: para cada celda vacía, elegir el usuario menos asignado que no esté ocupado en otra hoja
+    const newAssignments = JSON.parse(JSON.stringify(localAssignments.value))
+
+    daysInMonth.value.forEach(day => {
+      activeShifts.value.forEach((_: unknown, sIdx: number) => {
+        // Si ya hay alguien asignado, no pisar
+        if (newAssignments[day.dayNum]?.[sIdx]) return
+
+        const candidates = slotPool[day.dayNum][sIdx]
+          .filter(u => {
+            const identity = formatIdentity(u)
+            // No asignar si ya está en otra hoja hermana en el mismo turno/día
+            return !occupiedSlots.has(`${identity}|${day.dayNum}|${sIdx}`)
+          })
+          .sort((a, b) => (userAssignCount[a.userId] || 0) - (userAssignCount[b.userId] || 0))
+
+        if (candidates.length === 0) return
+
+        const chosen = candidates[0]
+        const identity = formatIdentity(chosen)
+
+        if (!newAssignments[day.dayNum]) newAssignments[day.dayNum] = {}
+        newAssignments[day.dayNum][sIdx] = identity
+        userAssignCount[chosen.userId] = (userAssignCount[chosen.userId] || 0) + 1
+        // Marcar para que otras celdas del mismo día/turno en esta hoja también lo eviten
+        occupiedSlots.add(`${identity}|${day.dayNum}|${sIdx}`)
+      })
+    })
+
+    // 7. Guardar en Firestore
+    await updateDoc(doc(db, 'serviceSheets', props.sheet.id), { assignments: newAssignments })
+    localAssignments.value = newAssignments
+
+    snackbarText.value = 'Autocompletado aplicado con éxito'
+    snackbarColor.value = 'success'
+    snackbar.value = true
+  } catch (err: any) {
+    console.error('[Autocompletar] Error:', err)
+    snackbarText.value = 'Error al autocompletar: ' + err.message
+    snackbarColor.value = 'error'
+    snackbar.value = true
+  } finally {
+    autoFilling.value = false
   }
 }
 

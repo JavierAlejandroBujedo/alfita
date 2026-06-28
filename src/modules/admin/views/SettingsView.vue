@@ -1,7 +1,6 @@
 <template>
   <div class="settings-view">
     <v-container fluid class="pa-8">
-
       <v-row>
         <!-- 1. GESTIÓN DE REPARTICIONES -->
         <v-col cols="12" md="4">
@@ -132,7 +131,7 @@
               <v-text-field v-model="subDialog.data.title" label="Título del Plan" variant="outlined" rounded="lg" class="mb-2" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-select v-model="subDialog.data.category" :items="['Designador', 'Asignado']" label="Tipo de Plan" variant="outlined" rounded="lg" />
+              <v-select v-model="subDialog.data.category" :items="['Designador', 'Asignado', 'Ambos']" label="Tipo de Plan" variant="outlined" rounded="lg" />
             </v-col>
             <v-col cols="12" md="6">
               <v-switch v-model="subDialog.data.visible" label="Visible en Web" color="amber-darken-3" density="compact" />

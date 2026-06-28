@@ -5,10 +5,11 @@
         <v-col cols="12" class="mx-auto" style="max-width: 1400px">
           <!-- CABECERA CON BÚSQUEDA -->
           <v-row align="end" class="mb-8">
-            <v-col cols="12" md="6">
+            <!--<v-col cols="12" md="6">
               <h1 class="text-h3 font-weight-black text-primary mb-2 ls-tight">Control de Usuarios</h1>
               <p class="text-body-2 text-grey-darken-1">Registro central de membresías y legajos.</p>
-            </v-col>
+            </v-col>-->
+            <v-btn icon="mdi-arrow-left" variant="text" color="grey-darken-1" to="/configuracion" class="mr-2" />
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="search"

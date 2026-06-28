@@ -121,6 +121,9 @@ async function checkSubscription(uid: string): Promise<boolean> {
 router.beforeEach(async (to, _) => {
     const authStore = useAuthStore()
 
+    // Esperar que Firebase resuelva el estado inicial de auth
+    await authStore.authReady
+
     // 1. Redirigir al login si no hay usuario autenticado
     if (to.meta.requiresAuth && !authStore.user) {
         return { name: 'login' }
