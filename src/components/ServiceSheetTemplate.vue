@@ -18,45 +18,53 @@
           Autocompletar
         </v-btn>
         <v-btn
+          prepend-icon="mdi-file-document-outline"
+          variant="elevated"
+          color="indigo-darken-2"
+          class="mr-2 font-weight-bold"
+          @click="showSummary = !showSummary"
+        >
+          {{ showSummary ? 'Ver Planilla' : 'Resumen' }}
+        </v-btn>
+
+        <v-btn
           prepend-icon="mdi-printer"
           variant="elevated"
           color="white"
-          class="mr-2 text-primary font-weight-bold"
+          class="mr-4 text-primary font-weight-bold"
+          :loading="printing"
           @click="printSheet"
         >
           Imprimir
         </v-btn>
-        <v-btn
-          prepend-icon="mdi-share-variant"
-          variant="elevated"
-          color="white"
-          class="mr-4 text-primary font-weight-bold"
-          @click="shareSheet"
-        >
-          Compartir
-        </v-btn>
       </v-toolbar>
 
-      <v-card-text class="pa-0 d-flex justify-center bg-grey-lighten-4">
+      <v-card-text class="pa-0 bg-grey-lighten-4 sheet-scroll-wrapper">
         <!-- PLANILLA ESTILO EXCEL BOXED -->
-        <v-card rounded="0" class="service-sheet pa-10 my-8 mx-auto bg-white" width="1122">
+        <div class="sheet-outer-centering">
+        <v-card v-show="!showSummary" id="front-sheet" rounded="0" class="service-sheet px-4 px-md-8 py-6 py-md-8 my-4 my-md-8 mx-auto bg-white">
           <div class="print-container">
             
             <!-- CABECERA -->
-            <div class="header-section text-center mb-6">
-              <h1 class="text-h4 font-weight-black text-uppercase mb-2">
+            <div class="header-section text-center pt-2 mb-2" style="position: relative;">
+              <div class="province-label">
+                <div>POLICÍA DE LA PROVINCIA</div>
+                <div>CÓRDOBA</div>
+              </div>
+              <div class="division-label">DIVISIÓN POLICÍA ADICIONAL</div>
+              <h1 class="font-weight-black text-uppercase mb-1" style="font-size: 18px !important; line-height: 1.1;">
                 PLANILLA DE COBERTURA DE SERVICIOS
               </h1>
               <div class="d-flex justify-center align-center">
-                <span class="text-h6 font-weight-bold border-black px-6 py-1 text-uppercase bg-grey-lighten-3">
+                <span class="font-weight-bold border-black px-4 py-0.5 text-uppercase bg-grey-lighten-3" style="font-size: 12px !important;">
                   CORRESPONDIENTE AL MES DE {{ sheet.month }} DE {{ sheet.year }}
                 </span>
               </div>
             </div>
-
+          
             <!-- DATOS ENTIDAD (NUEVO CONTENEDOR) -->
-            <div class="entity-box pa-3 mb-4 bg-grey-lighten-5 border-black">
-              <div class="text-overline font-weight-black mb-2 border-b-black d-flex justify-space-between">
+            <div class="entity-box pa-2 mb-2 bg-grey-lighten-5 border-black">
+              <div class="text-overline font-weight-black mb-1 border-b-black d-flex justify-space-between" style="font-size: 0.65rem !important; line-height: 1.2;">
                 <span>DATOS DE LA ENTIDAD</span>
                 <span class="text-primary">SVC Nº: {{ sheet.svcNumber || '---' }}</span>
               </div>
@@ -95,8 +103,8 @@
             </div>
 
             <!-- DATOS PERSONAL ENCARGADO -->
-            <div class="personal-box pa-3 mb-6 bg-grey-lighten-4 border-black">
-              <div class="text-overline font-weight-black mb-2 border-b-black">DATOS DEL PERSONAL ENCARGADO</div>
+            <div class="personal-box pa-2 mb-2 bg-grey-lighten-4 border-black">
+              <div class="text-overline font-weight-black mb-1 border-b-black" style="font-size: 0.65rem !important; line-height: 1.2;">DATOS DEL PERSONAL ENCARGADO</div>
               <div class="info-grid">
                 <div class="grid-column">
                   <div class="field-row mb-1">
@@ -126,7 +134,7 @@
             </div>
 
             <!-- TABLA DE DÍAS -->
-            <div class="table-content">
+            <div class="table-content grid-compact">
               <table class="w-100 border-collapse border-black-thick">
                 <thead>
                   <tr class="bg-grey-lighten-2 text-center font-weight-black">
@@ -138,7 +146,7 @@
                       :key="sIdx"
                       class="border-black pa-1 text-uppercase"
                     >
-                      TURNO: {{ shift.start }} - {{ shift.end }}
+                      HORARIO: {{ shift.start }} - {{ shift.end }}
                     </th>
                     <!-- Si no hay turnos, mostrar uno vacío para mantener estructura -->
                     <th v-if="activeShifts.length === 0" class="border-black pa-1">HORARIO NO DEFINIDO</th>
@@ -197,31 +205,76 @@
                   </tbody>
                 </table>
               </div>
-              <v-snackbar v-model="snackbar" :color="snackbarColor" rounded="pill" location="top">
-                {{ snackbarText }}
-              </v-snackbar>
+          </div>
+        </v-card>
 
-            <!-- PIE DE PLANILLA -->
-            <div class="footer-area mt-6">
-              <div class="field-row mb-8">
-                <span class="label">OBSERVACIONES:</span>
-                <span class="value box min-h-120">{{ sheet.description || '---' }}</span>
-              </div>
+        <!-- PLANILLA DORSO: RESUMEN DE SERVICIOS ASIGNADOS -->
+        <v-card v-show="showSummary" id="back-sheet" rounded="0" class="service-sheet sheet-portrait-width px-4 px-md-8 py-5 py-md-6 my-4 my-md-8 mx-auto bg-white">
+          <div class="print-container">
+            <!-- CABECERA DORSO -->
+            <div class="header-section text-center mb-6">
+              <h2 class="text-h5 font-weight-black text-uppercase mb-6 text-decoration-underline" style="letter-spacing: 1px;">
+                RESUMEN DE SERVICIOS ASIGNADOS
+              </h2>
+            </div>
 
-              <div class="d-flex justify-space-around mt-12 pt-12">
-                <div class="sig-container">
-                  <div class="sig-line"></div>
-                  <div class="text-center font-weight-bold small-text text-uppercase">Firma y Sello de la Entidad</div>
-                </div>
-                <div class="sig-container">
-                  <div class="sig-line"></div>
-                  <div class="text-center font-weight-bold small-text text-uppercase">Firma y Sello del Policía</div>
-                </div>
+            <!-- GRILLAS DE RESUMEN (UNA POR TURNO) -->
+            <div v-for="(shift, sIdx) in activeShifts" :key="sIdx" class="mb-6 table-content grid-compact">
+              <table class="w-100 border-collapse border-black-thick summary-table">
+                <thead>
+                  <tr class="bg-grey-lighten-2 text-center font-weight-black">
+                    <th colspan="4" class="border-black pa-2 py-2 text-uppercase text-caption font-weight-bold">
+                      Días asignados {{ Number(sIdx) + 1 }}º Horario: {{ shift.start }} a {{ shift.end }}
+                    </th>
+                  </tr>
+                  <tr class="bg-grey-lighten-4 text-center font-weight-black">
+                    <th class="border-black pa-1 text-caption font-weight-bold" style="width: 40%">Apellido y Nombres</th>
+                    <th class="border-black pa-1 text-caption font-weight-bold" style="width: 20%">D.N.I.</th>
+                    <th class="border-black pa-1 text-caption font-weight-bold" style="width: 25%">Días asignados</th>
+                    <th class="border-black pa-1 text-caption font-weight-bold" style="width: 15%">Notificación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="user in getUsersForShift(Number(sIdx))" :key="user.userId" class="text-center animate-row">
+                    <td class="border-black pa-1 px-3 text-left font-weight-medium text-uppercase text-caption">
+                      {{ user.hierarchy }} {{ user.displayName }}
+                    </td>
+                    <td class="border-black pa-1 font-weight-black text-caption">
+                      {{ user.dni }}
+                    </td>
+                    <td 
+                      class="border-black pa-1 font-weight-bold text-caption"
+                      :class="{ 'empty-assigned-cell': getUserAssignedDaysForShift(user.userId, Number(sIdx)).length === 0 }"
+                    >
+                      {{ getUserAssignedDaysForShift(user.userId, Number(sIdx)).join('-') }}
+                    </td>
+                    <td class="border-black pa-1"></td>
+                  </tr>
+                  <tr v-if="getUsersForShift(Number(sIdx)).length === 0">
+                    <td colspan="4" class="border-black pa-4 text-center text-grey italic text-caption">
+                      No hay personal asignado a este horario.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- FIRMA DEL DESIGNADOR -->
+            <div class="signature-section text-right mt-10">
+              <div class="signature-line-wrapper d-inline-block text-center mr-6" style="width: 280px;">
+                <div class="mb-2" style="height: 60px; border-bottom: 2px solid #000 !important;"></div>
+                <div class="font-weight-black text-caption text-uppercase">{{ sheet.jerarquia }} {{ sheet.policiaEncargado }}</div>
+                <div class="text-caption text-grey text-uppercase" style="font-size: 0.65rem !important;">{{ sheet.lugarRevista || 'DESIGNADOR DEL SERVICIO' }}</div>
               </div>
             </div>
 
           </div>
         </v-card>
+
+        </div>
+        <v-snackbar v-model="snackbar" :color="snackbarColor" rounded="pill" location="top">
+          {{ snackbarText }}
+        </v-snackbar>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -249,10 +302,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { ref, computed, watch, nextTick } from 'vue'
+import { doc, updateDoc, collection, query, where, getDocs, getDoc } from 'firebase/firestore'
 import { db } from '../plugins/firebase'
 import { useAuthStore } from '../modules/auth/stores/authStore'
+import html2canvas from 'html2canvas'
 
 const props = defineProps<{
   show: boolean
@@ -271,6 +325,7 @@ const snackbarColor = ref('success')
 const autoFilling = ref(false)
 const autoFillDialog = ref(false)
 const autoFillStats = ref({ available: 0, empty: 0 })
+const printing = ref(false)
 
 // Estado local para reactividad inmediata
 const localAssignments = ref<Record<string, Record<string, string>>>({})
@@ -278,6 +333,110 @@ const localAssignments = ref<Record<string, Record<string, string>>>({})
 watch(() => props.sheet.assignments, (newVal) => {
   if (newVal) localAssignments.value = JSON.parse(JSON.stringify(newVal))
 }, { deep: true, immediate: true })
+
+// ─── RESUMEN (DORSO) ─────────────────────────────────────────────────────────
+const showSummary = ref(false)
+const userProfiles = ref<Record<string, { hierarchy: string, displayName: string, dni: string, email: string }>>({})
+
+const fetchUserProfiles = async () => {
+  if (!props.availability || props.availability.length === 0 || !props.sheet?.id) return
+  
+  const userIds = Array.from(new Set(
+    props.availability
+      .filter(a => a.serviceId === props.sheet?.id)
+      .map(a => a.userId)
+      .filter(Boolean)
+  ))
+  
+  if (userIds.length === 0) return
+
+  try {
+    const profiles: Record<string, any> = {}
+    await Promise.all(userIds.map(async (uid) => {
+      const userRef = doc(db, 'users', uid)
+      const userSnap = await getDoc(userRef)
+      if (userSnap.exists()) {
+        const u = userSnap.data()
+        profiles[uid] = {
+          hierarchy: u.hierarchy || '',
+          displayName: u.displayName || 'Usuario',
+          dni: u.dni || '---',
+          email: u.email || ''
+        }
+      } else {
+        const av = props.availability?.find(a => a.userId === uid)
+        profiles[uid] = {
+          hierarchy: av?.hierarchy || '',
+          displayName: av?.userName || 'Desconocido',
+          dni: av?.dni || '---',
+          email: av?.userEmail || ''
+        }
+      }
+    }))
+    userProfiles.value = profiles
+  } catch (err) {
+    console.error('Error fetching user profiles:', err)
+  }
+}
+
+watch(() => props.show, (isVisible) => {
+  if (isVisible) {
+    showSummary.value = false
+    fetchUserProfiles()
+  }
+}, { immediate: true })
+
+watch(() => props.availability, () => {
+  if (props.show) {
+    fetchUserProfiles()
+  }
+}, { deep: true })
+
+const uniqueAvailableUsers = computed(() => {
+  if (!props.availability || !props.sheet) return []
+  
+  const serviceAvails = props.availability.filter(a => a.serviceId === props.sheet.id)
+  const seenIds = new Set<string>()
+  const list: any[] = []
+  
+  serviceAvails.forEach(a => {
+    if (a.userId && !seenIds.has(a.userId)) {
+      seenIds.add(a.userId)
+      const profile = userProfiles.value[a.userId]
+      list.push({
+        userId: a.userId,
+        hierarchy: profile?.hierarchy || a.hierarchy || '',
+        displayName: profile?.displayName || a.userName || 'Usuario',
+        dni: profile?.dni || a.dni || '---',
+        email: profile?.email || a.userEmail || ''
+      })
+    }
+  })
+  
+  return list.sort((a, b) => a.displayName.localeCompare(b.displayName, 'es'))
+})
+
+const getUserAssignedDaysForShift = (userId: string, shiftIdx: number) => {
+  if (!props.availability || !props.sheet) return []
+  const av = props.availability.find(a => a.serviceId === props.sheet.id && a.userId === userId)
+  if (!av) return []
+  const identity = formatIdentity(av)
+  
+  const assignedDays: number[] = []
+  Object.entries(localAssignments.value).forEach(([dayStr, shifts]) => {
+    if (shifts[shiftIdx.toString()] === identity) {
+      assignedDays.push(parseInt(dayStr))
+    }
+  })
+  
+  return assignedDays.sort((a, b) => a - b)
+}
+
+const getUsersForShift = (shiftIdx: number) => {
+  return uniqueAvailableUsers.value.filter(user => {
+    return getUserAssignedDaysForShift(user.userId, shiftIdx).length > 0
+  })
+}
 
 const isDesignadorOrAdmin = computed(() => {
   return authStore.userRole === 1 || authStore.userRole === 2
@@ -312,9 +471,263 @@ const activeShifts = computed(() => {
   return (props.sheet.shifts || []).filter((s: any) => s !== null)
 })
 
-const printSheet = () => {
-  window.print()
+const printSheet = async () => {
+  const frontCard = document.getElementById('front-sheet')
+  const backCard = document.getElementById('back-sheet')
+  if (!frontCard || !backCard) return
+
+  // 1. Abrir ventana popup de manera 100% sincrónica para evitar bloqueos en celulares
+  const win = window.open('', '_blank')
+  if (!win) {
+    snackbarText.value = 'El navegador bloqueó la ventana de impresión. Permití los popups.'
+    snackbarColor.value = 'warning'
+    snackbar.value = true
+    return
+  }
+
+  // Escribir contenido temporal de carga en el popup
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <title>Preparando planilla de cobertura...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #ffffff;
+            color: #424242;
+          }
+          .spinner {
+            border: 4px solid rgba(0,0,0,0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border-left-color: #00897b;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+          }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="spinner"></div>
+        <div style="font-size: 16px; font-weight: 500;">Generando vista de impresión...</div>
+      </body>
+    </html>
+  `)
+  win.document.close()
+
+  printing.value = true
+
+  // Respaldar estados iniciales de visualización y maquetación
+  const frontWasHidden = frontCard.style.display === 'none'
+  const backWasHidden = backCard.style.display === 'none'
+
+  const savedFrontPosition = frontCard.style.position
+  const savedFrontTop = frontCard.style.top
+  const savedFrontLeft = frontCard.style.left
+  const savedFrontWidth = frontCard.style.width
+  const savedFrontMaxWidth = frontCard.style.maxWidth
+
+  const savedBackPosition = backCard.style.position
+  const savedBackTop = backCard.style.top
+  const savedBackLeft = backCard.style.left
+  const savedBackWidth = backCard.style.width
+  const savedBackMaxWidth = backCard.style.maxWidth
+
+  // Forzar maquetación portrait fija a 800px fuera de la pantalla durante la captura
+  frontCard.style.position = 'fixed'
+  frontCard.style.top = '-99999px'
+  frontCard.style.left = '-99999px'
+  frontCard.style.display = 'block'
+  frontCard.style.visibility = 'visible'
+  frontCard.style.width = '800px'
+  frontCard.style.maxWidth = '800px'
+
+  backCard.style.position = 'fixed'
+  backCard.style.top = '-99999px'
+  backCard.style.left = '-99999px'
+  backCard.style.display = 'block'
+  backCard.style.visibility = 'visible'
+  backCard.style.width = '800px'
+  backCard.style.maxWidth = '800px'
+
+  // Agregar clase temporaria para aplicar compresión vertical de impresión
+  frontCard.classList.add('printing-layout')
+  backCard.classList.add('printing-layout')
+
+  try {
+    // Esperar repintado del DOM
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 350))
+
+    const frontEl = frontCard.querySelector('.print-container') as HTMLElement | null
+    const backEl = backCard.querySelector('.print-container') as HTMLElement | null
+    if (!frontEl || !backEl) throw new Error('Contenedor de impresión ausente')
+
+    // Hacer visible justo antes de capturar
+    frontCard.style.visibility = ''
+    backCard.style.visibility = ''
+
+    // Reiniciar temporalmente el scroll del contenedor principal para Capturar completo
+    const scrollWrapper = document.querySelector('.sheet-scroll-wrapper')
+    const originalScrollTop = scrollWrapper ? scrollWrapper.scrollTop : 0
+    const originalScrollLeft = scrollWrapper ? scrollWrapper.scrollLeft : 0
+    if (scrollWrapper) {
+      scrollWrapper.scrollTop = 0
+      scrollWrapper.scrollLeft = 0
+    }
+
+    // Captura Frente
+    const canvasFront = await html2canvas(frontEl, {
+      scale: 2.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: 1200
+    })
+
+    // Captura Dorso
+    const canvasBack = await html2canvas(backEl, {
+      scale: 2.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: 1200
+    })
+
+    // Restaurar scroll
+    if (scrollWrapper) {
+      scrollWrapper.scrollTop = originalScrollTop
+      scrollWrapper.scrollLeft = originalScrollLeft
+    }
+
+    // Restaurar maquetación en la pantalla original
+    frontCard.classList.remove('printing-layout')
+    backCard.classList.remove('printing-layout')
+
+    frontCard.style.display = frontWasHidden ? 'none' : ''
+    frontCard.style.visibility = ''
+    frontCard.style.position = savedFrontPosition
+    frontCard.style.top = savedFrontTop
+    frontCard.style.left = savedFrontLeft
+    frontCard.style.width = savedFrontWidth
+    frontCard.style.maxWidth = savedFrontMaxWidth
+
+    backCard.style.display = backWasHidden ? 'none' : ''
+    backCard.style.visibility = ''
+    backCard.style.position = savedBackPosition
+    backCard.style.top = savedBackTop
+    backCard.style.left = savedBackLeft
+    backCard.style.width = savedBackWidth
+    backCard.style.maxWidth = savedBackMaxWidth
+
+    const imgDataFront = canvasFront.toDataURL('image/png')
+    const imgDataBack = canvasBack.toDataURL('image/png')
+    const svcInfo = `Planilla SVC ${props.sheet.svcNumber || ''} – ${props.sheet.month || ''} ${props.sheet.year || ''}`
+
+    // Sobreescribir el popup con la vista final de impresión de 2 páginas
+    win.document.write(`
+      <!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>${svcInfo}<\/title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            html, body { background: #fff; width: 210mm; }
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
+            .page {
+              width: 210mm;
+              height: 297mm;
+              display: flex;
+              align-items: flex-start;
+              justify-content: center;
+              overflow: hidden;
+              padding: 8mm 10mm;
+              page-break-after: always;
+              break-after: page;
+            }
+            .page:last-child {
+              page-break-after: avoid;
+              break-after: avoid;
+            }
+            img {
+              width: 100%;
+              height: auto;
+              display: block;
+            }
+            .page:first-child img {
+              transform: scaleY(0.88);
+              transform-origin: top center;
+            }
+          <\/style>
+        <\/head>
+        <body>
+          <div class="page">
+            <img src="${imgDataFront}" alt="Planilla Frente" />
+          <\/div>
+          <div class="page">
+            <img src="${imgDataBack}" alt="Resumen" />
+          <\/div>
+          <script>
+            window.addEventListener('load', function() {
+              setTimeout(function() { 
+                window.print(); 
+                setTimeout(function() { window.close(); }, 1500);
+              }, 400);
+            });
+          <\/script>
+        <\/body>
+      <\/html>
+    `)
+    win.document.close()
+
+  } catch (err) {
+    // Restaurar en caso de excepción catastrófica
+    frontCard.classList.remove('printing-layout')
+    backCard.classList.remove('printing-layout')
+
+    frontCard.style.display = frontWasHidden ? 'none' : ''
+    frontCard.style.visibility = ''
+    frontCard.style.position = savedFrontPosition
+    frontCard.style.top = savedFrontTop
+    frontCard.style.left = savedFrontLeft
+    frontCard.style.width = savedFrontWidth
+    frontCard.style.maxWidth = savedFrontMaxWidth
+
+    backCard.style.display = backWasHidden ? 'none' : ''
+    backCard.style.visibility = ''
+    backCard.style.position = savedBackPosition
+    backCard.style.top = savedBackTop
+    backCard.style.left = savedBackLeft
+    backCard.style.width = savedBackWidth
+    backCard.style.maxWidth = savedBackMaxWidth
+
+    console.error('[Print] Error:', err)
+    win.close()
+    snackbarText.value = 'Error al preparar la impresión'
+    snackbarColor.value = 'error'
+    snackbar.value = true
+  } finally {
+    printing.value = false
+  }
 }
+
 
 const getAssignment = (dayNum: number, shiftIdx: number) => {
   const day = localAssignments.value[dayNum.toString()]
@@ -490,21 +903,34 @@ const confirmAutoFill = async () => {
   }
 }
 
-const shareSheet = async () => {
-  const url = `${window.location.origin}/hoja-de-servicio/${props.sheet.id}`
-  try {
-    await navigator.clipboard.writeText(url)
-    snackbarText.value = '¡Enlace de planilla copiado!'
-    snackbarColor.value = 'success'
-    snackbar.value = true
-  } catch (err) {
-    console.error('Error al copiar enlace:', err)
-  }
-}
 </script>
 
 <style scoped>
+/* ── Contenedor de scroll horizontal en pantalla ─────────────────────── */
+.sheet-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Centra la planilla y le da un max-width generoso en desktop */
+.sheet-outer-centering {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.sheet-portrait-width {
+  max-width: 800px !important;
+}
+
+/* ── Planilla ─────────────────────────────────────────────────────────── */
 .service-sheet {
+  /* En pantalla: ocupa todo el ancho disponible, máximo A4 landscape (297mm ≈ 1122px) */
+  width: 100%;
+  max-width: 1122px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
   color: #000 !important;
   border: 1px solid #000;
@@ -514,6 +940,59 @@ const shareSheet = async () => {
   color: #000 !important;
 }
 
+/* Tabla horizontal scrollable en móviles */
+.table-content {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Comprime verticalmente la grilla de días/horarios un 10% solo en impresión */
+.printing-layout .grid-compact {
+  transform: scaleY(0.90);
+  transform-origin: top center;
+}
+
+/* Comprime verticalmente en impresión y ajusta márgenes entre secciones */
+.printing-layout .entity-box {
+  transform: scaleY(0.90);
+  transform-origin: top center;
+  margin-bottom: 0 !important;   /* Sin espacio entre entidad y personal encargado */
+}
+
+.printing-layout .personal-box {
+  transform: scaleY(0.90);
+  transform-origin: top center;
+  margin-bottom: 3px !important; /* Mitad del espacio hacia la grilla de días */
+}
+
+.province-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  text-align: center;
+  line-height: 1.2;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.empty-assigned-cell {
+  background-color: #d9d9d9 !important;
+}
+
+.summary-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.division-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 .border-black { border: 1px solid #000 !important; }
 .border-black-thick { border: 2px solid #000 !important; }
 .border-b-black { border-bottom: 1px solid #000 !important; }
@@ -521,30 +1000,38 @@ const shareSheet = async () => {
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 12px;
+}
+
+/* En pantallas muy pequeñas, apilar las columnas */
+@media (max-width: 640px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 .field-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .label {
   font-weight: 800;
-  font-size: 0.85rem;
-  margin-right: 8px;
+  font-size: 0.80rem;
+  margin-right: 6px;
   white-space: nowrap;
 }
 
 .value.box {
   flex-grow: 1;
   border: 1px solid #000;
-  padding: 4px 10px;
-  min-height: 30px;
-  font-size: 0.9rem;
+  padding: 3px 8px;
+  min-height: 26px;
+  font-size: 0.82rem;
 }
-
-.min-h-120 { min-height: 120px !important; }
 
 .villa-style {
   font-family: 'Google Sans', sans-serif !important;
@@ -552,8 +1039,8 @@ const shareSheet = async () => {
   letter-spacing: 0.5px;
 }
 
-.small-text { font-size: 0.7rem; }
-.assignment-cell { font-size: 0.75rem; color: #000; min-width: 150px; }
+.small-text { font-size: 0.65rem; }
+.assignment-cell { font-size: 0.70rem; color: #000; min-width: 130px; }
 
 .interactive-cell.editing {
   cursor: pointer;
@@ -564,12 +1051,144 @@ const shareSheet = async () => {
   background-color: #e3f2fd !important;
 }
 
-.sig-container { width: 250px; }
-.sig-line { border-top: 1.5px solid #000; margin-bottom: 5px; }
-
+/* ── ESTILOS DE IMPRESIÓN A4 ─────────────────────────────────────────── */
 @media print {
-  .v-toolbar, .v-btn, .v-snackbar { display: none !important; }
-  .service-sheet { box-shadow: none !important; margin: 0 !important; padding: 20px !important; width: 100% !important; border: none !important; }
-  body, .bg-grey-lighten-4 { background-color: white !important; }
+  /* Tamaño A4 portrait. Cambiar a landscape si los turnos son muchos: */
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  /* Ocultar controles de UI */
+  .v-toolbar,
+  .v-btn,
+  .v-snackbar,
+  .v-menu,
+  .v-overlay {
+    display: none !important;
+  }
+
+  /* Hacer que toda la página sea blanca */
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ocultar el scroll-wrapper y el fondo gris */
+  .sheet-scroll-wrapper,
+  .sheet-outer-centering,
+  .bg-grey-lighten-4 {
+    background: white !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  /* La planilla ocupa el 100% del área imprimible y se autoescala */
+  .service-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    /* Escalar automáticamente para que todo quepa en una página */
+    transform-origin: top left;
+  }
+
+  /* Sin scroll en tabla durante impresión */
+  .table-content {
+    overflow: visible !important;
+  }
+
+  /* Reducir tamaños de fuente para compactar */
+  .print-container {
+    font-size: 7pt !important;
+  }
+
+  .label {
+    font-size: 5.5pt !important;
+  }
+
+  .value.box {
+    font-size: 6pt !important;
+    min-height: 11pt !important;
+    padding: 0pt 3pt !important;
+  }
+
+  table th, table td {
+    font-size: 5.5pt !important;
+    padding: 0pt 1pt !important;
+    line-height: 1.05 !important;
+  }
+
+  .field-row {
+    margin-bottom: 0px !important;
+  }
+
+  .small-text {
+    font-size: 5pt !important;
+  }
+
+  .assignment-cell {
+    font-size: 5.5pt !important;
+    min-width: 0 !important;
+  }
+
+  h1 {
+    font-size: 10pt !important;
+    margin-bottom: 2pt !important;
+  }
+
+  .text-h6, .text-overline {
+    font-size: 6.5pt !important;
+  }
+
+  .province-label,
+  .division-label {
+    font-size: 5.5pt !important;
+  }
+
+  .empty-assigned-cell {
+    background-color: #d9d9d9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .summary-table th, 
+  .summary-table td {
+    font-size: 5.5pt !important;
+    padding: 1pt 1pt !important;
+    line-height: 1.05 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .summary-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .signature-section {
+    margin-top: 15pt !important;
+    page-break-inside: avoid;
+  }
+
+  .entity-box, .personal-box {
+    padding: 2pt !important;
+    margin-bottom: 2pt !important;
+  }
+
+  .header-section {
+    padding-top: 4pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  /* Evitar cortes de página en medio de la tabla */
+  table { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; }
 }
 </style>

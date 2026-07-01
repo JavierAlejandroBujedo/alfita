@@ -51,20 +51,33 @@
         <v-spacer class="d-none d-sm-block d-lg-none"></v-spacer>
 
         <div class="d-flex align-center ga-1 ml-auto ml-lg-0">
-          <v-btn
-            v-if="sheet.status === 'pending'"
-            size="x-small"
-            color="light-blue-lighten-4"
-            variant="flat"
-            class="font-weight-bold text-light-blue-darken-4"
-            prepend-icon="mdi-check-decagram"
-            @click.stop="$emit('confirm', sheet)"
-          >CONFIRMAR</v-btn>
-          
+          <!-- Botones para PENDIENTE -->
           <template v-if="sheet.status === 'pending'">
+            <v-btn
+              size="x-small"
+              color="light-blue-lighten-4"
+              variant="flat"
+              class="font-weight-bold text-light-blue-darken-4"
+              prepend-icon="mdi-check-decagram"
+              @click.stop="$emit('confirm', sheet)"
+            >CONFIRMAR</v-btn>
             <v-btn icon="mdi-pencil" size="x-small" variant="tonal" color="primary" @click.stop="$emit('edit', sheet)"></v-btn>
             <v-btn icon="mdi-delete" size="x-small" variant="tonal" color="error" @click.stop="$emit('delete', sheet)"></v-btn>
           </template>
+
+          <!-- Botón eliminar para CONFIRMADA -->
+          <v-tooltip v-if="sheet.status === 'confirmed'" text="Eliminar planilla confirmada" location="top">
+            <template #activator="{ props: tipProps }">
+              <v-btn
+                v-bind="tipProps"
+                icon="mdi-delete-outline"
+                size="x-small"
+                variant="tonal"
+                color="error"
+                @click.stop="$emit('delete', sheet)"
+              ></v-btn>
+            </template>
+          </v-tooltip>
         </div>
       </div>
     </div>

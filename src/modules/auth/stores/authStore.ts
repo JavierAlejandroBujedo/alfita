@@ -7,7 +7,7 @@ import {
     type User
 } from 'firebase/auth';
 import { auth, db } from '../../../plugins/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, query, where, collection, getDocs, limit, writeBatch, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, query, where, collection, getDocs, limit, writeBatch, onSnapshot, addDoc, updateDoc } from 'firebase/firestore';
 
 export type UserRole = 1 | 2 | 3 | null; // 1: Admin, 2: Designador, 3: Asignado
 
@@ -50,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
     /**
      * Crea o migra el perfil en Firestore.
      */
-    const initializeUserProfile = async (firebaseUser: User) => {
+    const initializeUserProfile = async (firebaseUser: User): Promise<{ data: any; isNew: boolean } | null> => {
         console.log('[Auth] Inicializando perfil para:', firebaseUser.email);
         try {
             const userRef = doc(db, 'users', firebaseUser.uid);
@@ -74,7 +74,6 @@ export const useAuthStore = defineStore('auth', () => {
                     });
 
                     // 2. Migrar "Propiedad" de las hojas (Deep Migration)
-                    // Esto evita el error de permisos y asegura que la query UID las encuentre
                     try {
                         const sheetsQ = query(collection(db, 'serviceSheets'), where('createdByEmail', '==', firebaseUser.email));
                         const sheetsSnap = await getDocs(sheetsQ);
@@ -92,10 +91,11 @@ export const useAuthStore = defineStore('auth', () => {
                             console.log('[Auth] Migración de hojas completada con éxito.');
                         }
                     } catch (migrationErr) {
-                        console.warn('[Auth] No se pudieron migrar las hojas (posible falta de permisos como admin):', migrationErr);
+                        console.warn('[Auth] No se pudieron migrar las hojas:', migrationErr);
                     }
 
-                    return legacyData;
+                    // Migración legacy: NO es perfil nuevo a efectos de invitaciones
+                    return { data: legacyData, isNew: false };
                 }
 
                 console.log('[Auth] No se encontró perfil previo. Creando nuevo con Role 3.');
@@ -111,13 +111,76 @@ export const useAuthStore = defineStore('auth', () => {
                     membershipType: 'GRATIS'
                 };
                 await setDoc(userRef, newData);
-                return newData;
+                // Esto SÍ es un perfil nuevo: procesar invitaciones pendientes
+                return { data: newData, isNew: true };
             }
             console.log('[Auth] Perfil ya existente con este UID.');
-            return userDoc.data();
+            return { data: userDoc.data(), isNew: false };
         } catch (err) {
             console.error('[Auth] Error crítico en initializeUserProfile:', err);
             return null;
+        }
+    };
+
+    /**
+     * Procesa invitaciones pendientes para un usuario recién registrado.
+     * Se ejecuta una sola vez al crear el perfil nuevo en Firestore.
+     */
+    const processPendingInvitations = async (firebaseUser: User) => {
+        const email = firebaseUser.email;
+        if (!email) return;
+        console.log('[Auth] Verificando invitaciones pendientes para:', email);
+        try {
+            const q = query(
+                collection(db, 'pending_invitations'),
+                where('email', '==', email),
+                where('processed', '==', false)
+            );
+            const snap = await getDocs(q);
+            if (snap.empty) {
+                console.log('[Auth] Sin invitaciones pendientes.');
+                return;
+            }
+
+            console.log(`[Auth] Procesando ${snap.size} invitación(es) pendiente(s)...`);
+            const batch = writeBatch(db);
+
+            for (const invDoc of snap.docs) {
+                const inv = invDoc.data();
+                const serviceIds: string[] = inv.serviceIds || [];
+
+                for (const sheetId of serviceIds) {
+                    // Verificar si ya existe el link
+                    const qLink = query(
+                        collection(db, 'service_links'),
+                        where('serviceId', '==', sheetId),
+                        where('userId', '==', firebaseUser.uid)
+                    );
+                    const linkSnap = await getDocs(qLink);
+
+                    if (linkSnap.empty) {
+                        await addDoc(collection(db, 'service_links'), {
+                            serviceId: sheetId,
+                            userId: firebaseUser.uid,
+                            email: email,
+                            active: true,
+                            createdAt: serverTimestamp(),
+                            fromInvitation: true
+                        });
+                        console.log('[Auth] service_link creado para hoja:', sheetId);
+                    } else if (!linkSnap.docs[0].data().active) {
+                        await updateDoc(linkSnap.docs[0].ref, { active: true, updatedAt: serverTimestamp() });
+                    }
+                }
+
+                // Marcar invitación como procesada
+                batch.update(invDoc.ref, { processed: true, processedAt: serverTimestamp(), resolvedUid: firebaseUser.uid });
+            }
+
+            await batch.commit();
+            console.log('[Auth] Invitaciones pendientes procesadas con éxito.');
+        } catch (err) {
+            console.error('[Auth] Error al procesar invitaciones pendientes:', err);
         }
     };
 
@@ -139,7 +202,12 @@ export const useAuthStore = defineStore('auth', () => {
         if (firebaseUser) {
             try {
                 // 1. Verificar/Inicializar perfil
-                await initializeUserProfile(firebaseUser);
+                const profileResult = await initializeUserProfile(firebaseUser);
+
+                // 1b. Si es un perfil creado por primera vez, procesar invitaciones pendientes
+                if (profileResult?.isNew) {
+                    processPendingInvitations(firebaseUser).catch(console.error);
+                }
 
                 // 2. Establecer listener en tiempo real para userData
                 const userRef = doc(db, 'users', firebaseUser.uid);

@@ -14,17 +14,28 @@
     </v-btn>
 
     <!-- BOTÓN: SOLICITAR DISPONIBILIDAD -->
-    <v-btn
+    <v-tooltip
       v-if="isDesignadorOrAdmin"
-      color="deep-orange-lighten-4"
-      variant="flat"
-      prepend-icon="mdi-email-plus-outline"
-      rounded="pill"
-      class="font-weight-bold px-6 text-deep-orange-darken-4"
-      @click="$emit('requestAvailability')"
+      :text="!hasSheetsWithShifts ? 'Configurá al menos un horario en una hoja de servicio primero' : ''"
+      location="bottom"
+      :disabled="hasSheetsWithShifts"
     >
-      Solicitar Disponibilidad
-    </v-btn>
+      <template #activator="{ props: tipProps }">
+        <span v-bind="tipProps">
+          <v-btn
+            color="deep-orange-lighten-4"
+            variant="flat"
+            prepend-icon="mdi-email-plus-outline"
+            rounded="pill"
+            class="font-weight-bold px-6 text-deep-orange-darken-4"
+            :disabled="!hasSheetsWithShifts"
+            @click="$emit('requestAvailability')"
+          >
+            Solicitar Disponibilidad
+          </v-btn>
+        </span>
+      </template>
+    </v-tooltip>
 
     <!-- BOTÓN: CREAR HOJA DE SERVICIO -->
     <v-btn
@@ -56,6 +67,7 @@
 defineProps<{
   isDesignadorOrAdmin: boolean;
   hasPending: boolean;
+  hasSheetsWithShifts: boolean;
 }>();
 
 defineEmits(['staffAvailability', 'requestAvailability', 'createSheet', 'submitAvailability']);

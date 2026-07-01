@@ -39,6 +39,7 @@
             class="ml-md-16"
             :is-designador-or-admin="isDesignadorOrAdmin"
             :has-pending="pendingLinkedServices.length > 0"
+            :has-sheets-with-shifts="hasSheetsWithShifts"
             @staff-availability="staffAvailabilityModal = true"
             @request-availability="availabilityModal = true"
             @create-sheet="openCreateModal"
@@ -176,7 +177,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../plugins/firebase'
 import { useAuthStore } from '../modules/auth/stores/authStore'
 
@@ -238,6 +239,9 @@ let unsubscribeAvailability: any = null
 const isDesignadorOrAdmin = computed(() => authStore.userRole === 1 || authStore.userRole === 2)
 const hasLinkedServices = computed(() => visibleLinkedServices.value.length > 0)
 const pendingLinkedServices = computed(() => linkedServices.value.filter(s => s.status === 'pending'))
+const hasSheetsWithShifts = computed(() =>
+  sheets.value.some(s => (s.shifts || []).some((sh: any) => sh && sh.start))
+)
 
 const visibleLinkedServices = computed(() => {
   const now = new Date()
@@ -618,66 +622,118 @@ const handleSendRequest = async ({ serviceIds, emails }: { serviceIds: string[],
   sendingRequest.value = true
   console.log('[Solicitud] Iniciando envío. Emails:', emails, '| Hojas (sheetIds):', serviceIds)
   try {
-    // 1. Resolver emails a UIDs
+    // 1. Resolver emails a UIDs (en chunks de 10 por límite de Firestore)
     const resolvedUsers: any[] = []
+    const unresolvedEmails: string[] = []
+
     for (let i = 0; i < emails.length; i += 10) {
       const chunk = emails.slice(i, i + 10)
       const qUsers = query(collection(db, 'users'), where('email', 'in', chunk))
       const userSnaps = await getDocs(qUsers)
+      const foundEmails = userSnaps.docs.map(u => u.data().email)
       userSnaps.forEach(u => resolvedUsers.push({ id: u.id, email: u.data().email }))
-    }
-    console.log('[Solicitud] Usuarios encontrados en Firestore:', resolvedUsers)
-
-    if (resolvedUsers.length === 0) {
-      showSnackbar('Ningún correo ingresado tiene cuenta registrada en Alfita', 'warning')
-      sendingRequest.value = false
-      return
+      // Marcar los que no se encontraron
+      chunk.forEach(email => {
+        if (!foundEmails.includes(email)) unresolvedEmails.push(email)
+      })
     }
 
-    // 2. Iterar sobre hojas y guardar vinculación
-    await Promise.all(serviceIds.map(async (sheetId) => {
-      console.log('[Solicitud] Procesando hoja:', sheetId)
-      // 2a. Actualizar linkedEmails en la hoja (para el panel del designador)
-      const sheetRef = doc(db, 'serviceSheets', sheetId)
-      const snap = await getDoc(sheetRef)
-      if (snap.exists()) {
-        const currentEmails = snap.data()?.linkedEmails || []
-        const combinedEmails = Array.from(new Set([...currentEmails, ...emails]))
-        await updateDoc(sheetRef, { linkedEmails: combinedEmails })
-        console.log('[Solicitud] linkedEmails actualizado en hoja', sheetId)
-      }
+    console.log('[Solicitud] Usuarios encontrados:', resolvedUsers.map(u => u.email))
+    console.log('[Solicitud] Sin cuenta (pendientes):', unresolvedEmails)
 
-      // 2b. Crear o reactivar el service_link para que aparezca la tarjeta al "Asignado"
-      for (const u of resolvedUsers) {
-        const qLink = query(
-          collection(db, 'service_links'),
-          where('serviceId', '==', sheetId),
-          where('userId', '==', u.id)
-        )
-        const linkSnaps = await getDocs(qLink)
+    // 2. Procesar usuarios ENCONTRADOS: crear/reactivar service_links
+    if (resolvedUsers.length > 0) {
+      await Promise.all(serviceIds.map(async (sheetId) => {
+        // 2a. Actualizar linkedEmails en la hoja (incluye ambos grupos)
+        const sheetRef = doc(db, 'serviceSheets', sheetId)
+        const snap = await getDoc(sheetRef)
+        if (snap.exists()) {
+          const currentEmails = snap.data()?.linkedEmails || []
+          const combinedEmails = Array.from(new Set([...currentEmails, ...emails]))
+          await updateDoc(sheetRef, { linkedEmails: combinedEmails })
+        }
 
-        if (linkSnaps.empty) {
-          const newRef = await addDoc(collection(db, 'service_links'), {
-            serviceId: sheetId,
-            userId: u.id,
-            email: u.email,
-            active: true,
-            createdAt: serverTimestamp()
-          })
-          console.log('[Solicitud] service_link CREADO:', newRef.id, 'para usuario', u.email)
-        } else {
-          const existing = linkSnaps.docs[0]
-          if (!existing.data().active) {
-            await updateDoc(doc(db, 'service_links', existing.id), { active: true, updatedAt: serverTimestamp() })
-            console.log('[Solicitud] service_link REACTIVADO:', existing.id, 'para usuario', u.email)
-          } else {
-            console.log('[Solicitud] service_link ya existía y estaba activo para', u.email)
+        // 2b. Crear/reactivar service_link para cada usuario con cuenta
+        for (const u of resolvedUsers) {
+          const qLink = query(
+            collection(db, 'service_links'),
+            where('serviceId', '==', sheetId),
+            where('userId', '==', u.id)
+          )
+          const linkSnaps = await getDocs(qLink)
+          if (linkSnaps.empty) {
+            await addDoc(collection(db, 'service_links'), {
+              serviceId: sheetId,
+              userId: u.id,
+              email: u.email,
+              active: true,
+              createdAt: serverTimestamp()
+            })
+          } else if (!linkSnaps.docs[0].data().active) {
+            await updateDoc(doc(db, 'service_links', linkSnaps.docs[0].id), { active: true, updatedAt: serverTimestamp() })
           }
         }
-      }
-    }))
+      }))
+    } else {
+      // Aun sin usuarios, actualizar linkedEmails para registro
+      await Promise.all(serviceIds.map(async (sheetId) => {
+        const sheetRef = doc(db, 'serviceSheets', sheetId)
+        const snap = await getDoc(sheetRef)
+        if (snap.exists()) {
+          const currentEmails = snap.data()?.linkedEmails || []
+          const combinedEmails = Array.from(new Set([...currentEmails, ...emails]))
+          await updateDoc(sheetRef, { linkedEmails: combinedEmails })
+        }
+      }))
+    }
 
-    showSnackbar('Solicitud enviada correctamente a los usuarios')
+    // 3. Procesar emails SIN cuenta: guardar invitaciones pendientes
+    if (unresolvedEmails.length > 0) {
+      const batch = writeBatch(db)
+      for (const email of unresolvedEmails) {
+        // Buscar si ya hay una invitación pendiente para este email
+        const qInv = query(
+          collection(db, 'pending_invitations'),
+          where('email', '==', email),
+          where('processed', '==', false)
+        )
+        const invSnap = await getDocs(qInv)
+
+        if (invSnap.empty) {
+          // Crear nueva invitación pendiente
+          const newInvRef = doc(collection(db, 'pending_invitations'))
+          batch.set(newInvRef, {
+            email,
+            serviceIds,
+            processed: false,
+            createdAt: serverTimestamp(),
+            createdBy: authStore.user?.uid || ''
+          })
+          console.log('[Solicitud] pending_invitation CREADA para:', email)
+        } else {
+          // Actualizar la invitación existente sumando las nuevas hojas
+          const existing = invSnap.docs[0]
+          const existingServiceIds: string[] = existing.data().serviceIds || []
+          const mergedIds = Array.from(new Set([...existingServiceIds, ...serviceIds]))
+          batch.update(existing.ref, { serviceIds: mergedIds, updatedAt: serverTimestamp() })
+          console.log('[Solicitud] pending_invitation ACTUALIZADA para:', email)
+        }
+      }
+      await batch.commit()
+    }
+
+    // 4. Feedback al admin
+    const linkedCount = resolvedUsers.length
+    const pendingCount = unresolvedEmails.length
+
+    if (linkedCount > 0 && pendingCount > 0) {
+      showSnackbar(`${linkedCount} usuario(s) vinculado(s). ${pendingCount} invitación(es) guardada(s) para cuando se registren.`, 'info')
+    } else if (linkedCount > 0) {
+      showSnackbar('Solicitud enviada correctamente a los usuarios')
+    } else {
+      showSnackbar(`${pendingCount} invitación(es) guardada(s). Los usuarios verán la solicitud al registrarse en Alfita.`, 'warning')
+    }
+
     availabilityModal.value = false
   } catch (e: any) {
     console.error('[HomeView] Error al solicitar disponibilidad múltiple:', e)

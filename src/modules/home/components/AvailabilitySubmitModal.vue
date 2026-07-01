@@ -125,6 +125,25 @@
           </div>
         </div>
 
+        <!-- ALERTA PERFIL INCOMPLETO -->
+        <v-alert
+          v-if="!isProfileComplete"
+          type="warning"
+          variant="tonal"
+          rounded="lg"
+          density="compact"
+          class="mb-4"
+          icon="mdi-account-alert"
+        >
+          <strong>Perfil incompleto.</strong> Debes completar Nombre y Apellido, DNI, Jerarquía y Repartición en tu perfil antes de enviar disponibilidad.
+          <div class="mt-2">
+            <v-btn size="small" color="warning" variant="elevated" rounded="pill" @click="openProfile" class="font-weight-bold">
+              <v-icon start size="16">mdi-account-edit</v-icon>
+              Completar Mi Perfil
+            </v-btn>
+          </div>
+        </v-alert>
+
         <!-- NOTAS OPCIONALES -->
         <v-textarea
           v-model="notes"
@@ -149,7 +168,7 @@
           class="font-weight-bold elevation-4"
           :loading="loading"
           @click="handleSubmit"
-          :disabled="!hasAnySelection"
+          :disabled="!hasAnySelection || !isProfileComplete"
         >
           <v-icon start>mdi-check-circle</v-icon>
           Enviar {{ totalActiveDays }} días cargados
@@ -161,6 +180,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useAuthStore } from '../../../modules/auth/stores/authStore'
+
+const authStore = useAuthStore()
 
 const props = defineProps<{
   show: boolean
@@ -169,6 +191,18 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits(['close', 'submit'])
+
+// Validar perfil completo
+const isProfileComplete = computed(() => {
+  const d = authStore.userData
+  if (!d) return false
+  return !!(d.displayName && d.dni && d.reparticion && d.hierarchy)
+})
+
+const openProfile = () => {
+  emit('close')
+  authStore.showProfileModal = true
+}
 
 // selections[day] = [shiftIndex, shiftIndex, ...]
 const selections = ref<Record<number, number[]>>({})
